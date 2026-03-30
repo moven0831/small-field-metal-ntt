@@ -1,4 +1,5 @@
 pub mod m31;
+pub mod circle;
 
 /// Trait for finite field arithmetic used by NTT backends.
 /// Implementations must be consistent between Rust (CPU) and Metal (GPU) versions.
