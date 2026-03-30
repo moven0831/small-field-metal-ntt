@@ -1,0 +1,23 @@
+[package]
+name = "small-field-metal-ntt"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+description = "Comparative benchmark of NTT algorithm families over small ZK fields on Apple Metal GPUs"
+repository = "https://github.com/moven0831/small-field-metal-ntt"
+keywords = ["ntt", "metal", "gpu", "zk", "cryptography"]
+categories = ["cryptography", "mathematics"]
+
+[dependencies]
+metal = "0.30"
+objc = "0.2"
+block = "0.1"
+
+[dev-dependencies]
+# stwo-prover for cross-validation of Circle NTT correctness
+# stwo-prover = { git = "https://github.com/starkware-libs/stwo.git" }
+rand = "0.8"
+
+[[bench]]
+name = "ntt_benchmark"
+harness = false

@@ -1,0 +1,70 @@
+pub mod cpu_reference;
+
+use crate::field::Field;
+
+/// Backend trait for NTT implementations.
+///
+/// This trait abstracts over the GPU API (Metal, Vulkan, WebGPU) and algorithm
+/// variant. The benchmark harness operates on this trait, enabling fair comparison
+/// across algorithm families and future multi-platform support.
+///
+/// ```text
+///                    trait NttBackend
+///                          |
+///            +-------------+-------------+
+///            |             |             |
+///     MetalBackend   CpuNeonBackend  (future: VulkanBackend)
+///     ├── ct_dit_r2
+///     ├── ct_gs_r2
+///     ├── stockham_r2
+///     └── ct_gs_r4
+/// ```
+pub trait NttBackend<F: Field> {
+    /// Algorithm variant name for reporting.
+    fn name(&self) -> &str;
+
+    /// Forward NTT (evaluation): coefficients -> evaluations.
+    /// For M31 Circle NTT, this is the DCCT forward transform.
+    fn forward_ntt(&self, data: &mut [F], twiddles: &[F]) -> Result<(), NttError>;
+
+    /// Inverse NTT (interpolation): evaluations -> coefficients.
+    /// For M31 Circle NTT, this is the DCCT inverse transform (iDCCT).
+    fn inverse_ntt(&self, data: &mut [F], twiddles: &[F]) -> Result<(), NttError>;
+
+    /// Pointwise multiplication of two vectors in evaluation domain.
+    /// Used for round-trip benchmark: fwd(a) * fwd(b) -> inv() = a*b.
+    fn pointwise_mul(&self, a: &[F], b: &[F], out: &mut [F]) -> Result<(), NttError>;
+}
+
+#[derive(Debug)]
+pub enum NttError {
+    /// Input size is not a power of two.
+    InvalidSize(usize),
+    /// GPU device not found or not supported.
+    DeviceNotFound,
+    /// GPU buffer allocation failed.
+    BufferAllocFailed { requested_bytes: usize },
+    /// Metal shader compilation failed.
+    ShaderCompileError(String),
+    /// GPU execution error.
+    GpuExecutionError(String),
+    /// Correctness check failed: GPU output != CPU reference.
+    CorrectnessMismatch { index: usize, expected: u32, got: u32 },
+}
+
+impl std::fmt::Display for NttError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            NttError::InvalidSize(n) => write!(f, "Invalid NTT size: {} (must be power of 2)", n),
+            NttError::DeviceNotFound => write!(f, "No Metal GPU device found"),
+            NttError::BufferAllocFailed { requested_bytes } =>
+                write!(f, "GPU buffer allocation failed ({} bytes requested)", requested_bytes),
+            NttError::ShaderCompileError(msg) => write!(f, "Metal shader compilation error: {}", msg),
+            NttError::GpuExecutionError(msg) => write!(f, "GPU execution error: {}", msg),
+            NttError::CorrectnessMismatch { index, expected, got } =>
+                write!(f, "Correctness mismatch at index {}: expected {}, got {}", index, expected, got),
+        }
+    }
+}
+
+impl std::error::Error for NttError {}

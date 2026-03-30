@@ -1,0 +1,7 @@
+/target
+Cargo.lock
+*.air
+*.metallib
+*.csv
+/benchmark-results/
+.DS_Store
