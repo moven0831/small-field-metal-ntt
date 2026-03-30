@@ -25,10 +25,18 @@ pub trait NttBackend<F: Field> {
 
     /// Forward NTT (evaluation): coefficients -> evaluations.
     /// For M31 Circle NTT, this is the DCCT forward transform.
+    ///
+    /// The `twiddles` parameter provides pre-computed twiddle factors.
+    /// GPU backends use these (stored in device memory). The CPU reference
+    /// backend ignores this parameter and generates twiddles internally
+    /// for simplicity.
     fn forward_ntt(&self, data: &mut [F], twiddles: &[F]) -> Result<(), NttError>;
 
     /// Inverse NTT (interpolation): evaluations -> coefficients.
     /// For M31 Circle NTT, this is the DCCT inverse transform (iDCCT).
+    ///
+    /// The `twiddles` parameter provides pre-computed inverse twiddle factors.
+    /// See `forward_ntt` for the contract on twiddle usage per backend.
     fn inverse_ntt(&self, data: &mut [F], twiddles: &[F]) -> Result<(), NttError>;
 
     /// Pointwise multiplication of two vectors in evaluation domain.

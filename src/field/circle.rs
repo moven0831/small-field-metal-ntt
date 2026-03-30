@@ -136,7 +136,10 @@ impl Coset {
     }
 
     /// Double the coset: maps each point (x,y) -> (2x^2-1, 2xy).
+    ///
+    /// Panics if log_size is 0 (cannot halve a size-1 coset).
     pub fn double(&self) -> Coset {
+        debug_assert!(self.log_size > 0, "Cannot double a coset with log_size=0");
         Coset {
             initial: self.initial.double(),
             step: self.step.double(),
