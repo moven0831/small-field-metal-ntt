@@ -92,6 +92,7 @@ All GPU variants use a two-phase strategy:
 
 ### Future
 
+- [ ] Modular reduction strategy comparison (Mersenne vs Montgomery vs Barrett on GPU — which maps best to Metal ALUs and SIMD width?)
 - [ ] Cooperative CPU-GPU NTT on UMA (zero-copy handoff at stage boundary)
 - [ ] 4-step decomposition for 2^22+ transforms
 - [ ] Batched small NTTs for lattice crypto (Kyber/Dilithium)
