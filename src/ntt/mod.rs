@@ -1,4 +1,5 @@
 pub mod cpu_reference;
+pub mod metal_ct_dit_r2;
 
 use crate::field::Field;
 
