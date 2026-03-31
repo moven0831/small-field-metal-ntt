@@ -40,6 +40,7 @@ Apple M3, optimized build. Median of 20 iterations, 5 warmup.
 3. **Stockham's 2x memory hurts on UMA.** V3 is ~3-5% slower than V2. Out-of-place doesn't help on Apple Silicon.
 4. **CPU is competitive at 2^20.** Memory-bandwidth-bound. UMA means CPU and GPU share the same bandwidth.
 5. **GPU wins at mid-range.** Peak advantage at 2^14-2^16 where parallelism helps but memory isn't the bottleneck.
+6. **M31's Mersenne reduction is nearly free on GPU.** `reduce(x) = (x >> 31) + (x & 0x7FFFFFFF)` is a shift and a mask, no multiply. This makes butterflies arithmetic-cheap, so barrier and memory overhead dominate. The algorithm ranking may shift for Montgomery-reduced fields (BabyBear, KoalaBear) where each butterfly costs a full 32x32 multiply for reduction, making the compute-to-memory ratio heavier.
 
 ## Why This Matters
 
