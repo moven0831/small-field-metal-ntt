@@ -39,7 +39,12 @@ impl MetalCtDitR2 {
     /// Returns (result_data, total_gpu_time_ns).
     pub fn forward_ntt_gpu(&self, input: &[u32], log_n: usize) -> Result<(Vec<u32>, u64), NttError> {
         let n = input.len();
-        assert_eq!(n, 1 << log_n);
+        if n != (1 << log_n) {
+            return Err(NttError::InvalidSize(n));
+        }
+        if log_n > 30 {
+            return Err(NttError::InvalidSize(n)); // n must fit in u32 for GPU params
+        }
 
         // Generate twiddles on CPU (same as cpu_reference)
         let coset = Coset::odds(log_n as u32);
@@ -47,6 +52,10 @@ impl MetalCtDitR2 {
 
         let buf_data = self.ctx.buffer_from_slice(input)?;
         let mut total_ns: u64 = 0;
+
+        // Query max threadgroup size for this pipeline
+        let max_tpg = MetalContext::max_threads_per_threadgroup(&self.butterfly_pipeline) as u64;
+        let tpg_width = max_tpg.min(256);
 
         // Process layers from log_n-1 down to 0 (same order as CPU reference forward)
         for layer in (0..log_n).rev() {
@@ -59,8 +68,8 @@ impl MetalCtDitR2 {
             let params: Vec<u32> = vec![stride as u32, n as u32];
             let buf_p = self.ctx.buffer_from_slice(&params)?;
 
-            let tg = MTLSize::new(((num_butterflies as u64) + 255) / 256, 1, 1);
-            let tpg = MTLSize::new(256.min(num_butterflies as u64), 1, 1);
+            let tg = MTLSize::new(((num_butterflies as u64) + tpg_width - 1) / tpg_width, 1, 1);
+            let tpg = MTLSize::new(tpg_width.min(num_butterflies as u64), 1, 1);
 
             let ns = self.ctx.dispatch_and_wait(
                 &self.butterfly_pipeline,
