@@ -583,6 +583,58 @@ mod tests {
         assert_eq!(out, vec![M31(20), M31(60), M31(120), M31(200)]);
     }
 
+    // ── Device-phase radix-4 kernel coverage ──────────────────────────
+
+    #[test]
+    fn test_forward_matches_cpu_size32768() {
+        // log_n=15 (odd): 2 device layers → 1 r4 dispatch + 0 r2 fallback
+        // First test that actually fires ct_gs_r4_butterfly_device
+        let gpu = match skip_if_no_metal() {
+            Some(g) => g,
+            None => return,
+        };
+        let cpu = CpuReferenceBackend;
+        let n = 32768;
+        let original: Vec<M31> = lcg_data(n, 77777);
+        let mut cpu_data = original.clone();
+        cpu.forward_ntt(&mut cpu_data, &[]).unwrap();
+        let mut gpu_data = original.clone();
+        gpu.forward_ntt(&mut gpu_data, &[]).unwrap();
+        assert_eq!(gpu_data, cpu_data, "Forward mismatch at size {}", n);
+    }
+
+    #[test]
+    fn test_forward_matches_cpu_size65536() {
+        // log_n=16 (even): 3 device layers → 1 r4 + 1 r2
+        // Tests multiple device dispatches with mixed r4/r2
+        let gpu = match skip_if_no_metal() {
+            Some(g) => g,
+            None => return,
+        };
+        let cpu = CpuReferenceBackend;
+        let n = 65536;
+        let original: Vec<M31> = lcg_data(n, 88888);
+        let mut cpu_data = original.clone();
+        cpu.forward_ntt(&mut cpu_data, &[]).unwrap();
+        let mut gpu_data = original.clone();
+        gpu.forward_ntt(&mut gpu_data, &[]).unwrap();
+        assert_eq!(gpu_data, cpu_data, "Forward mismatch at size {}", n);
+    }
+
+    // ── Additional negative-path tests ───────────────────────────────────
+
+    #[test]
+    fn test_pointwise_mul_size_mismatch() {
+        let gpu = match skip_if_no_metal() {
+            Some(g) => g,
+            None => return,
+        };
+        let a = vec![M31(1); 4];
+        let b = vec![M31(1); 3];
+        let mut out = vec![M31(0); 4];
+        assert!(gpu.pointwise_mul(&a, &b, &mut out).is_err());
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────
 
     fn lcg_data(n: usize, seed: u64) -> Vec<M31> {
