@@ -30,6 +30,13 @@ Deferred from /office-hours and /plan-ceo-review on 2026-03-30.
 - **Effort:** S (human: ~2 days / CC: ~1 hour)
 - **Depends on:** Core M31 arithmetic (this sprint)
 
+### GPU Timestamps for Precise Kernel Timing
+- **What:** Replace wall-clock timing in `MetalContext::dispatch_and_wait()` with native `MTLCommandBuffer.gpuStartTime/gpuEndTime`. Currently blocked by metal-rs crate not exposing these methods (through v0.33). PR [gfx-rs/metal-rs#329](https://github.com/gfx-rs/metal-rs/pull/329) adds them but is not merged.
+- **Why:** Wall-clock includes command submission overhead (~10-50us). For micro-benchmarking individual NTT stages, GPU timestamps give ~nanosecond precision.
+- **Workaround:** Wall-clock is fine for algorithm comparison (overhead is constant across variants). Metal System Trace profiling (CEO expansion #1) provides per-kernel GPU timing independently.
+- **Effort:** S (human: ~2 hours / CC: ~15 min) once metal-rs#329 merges, or use raw objc FFI now
+- **Depends on:** metal-rs#329 merge or objc FFI wrapper
+
 ## P3 — Low Priority (when needed)
 
 ### CI with cargo bench on GitHub Actions macOS Runner
