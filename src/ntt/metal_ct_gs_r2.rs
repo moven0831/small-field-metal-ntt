@@ -667,6 +667,68 @@ mod tests {
         assert_eq!(gpu_data, original, "Round-trip failed at size 2");
     }
 
+    // ── Negative-path tests ────────────────────────────────────────────
+
+    #[test]
+    fn test_invalid_size_not_power_of_two() {
+        let gpu = match skip_if_no_metal() {
+            Some(g) => g,
+            None => return,
+        };
+        let mut data = vec![M31(1); 3];
+        assert!(gpu.forward_ntt(&mut data, &[]).is_err());
+        assert!(gpu.inverse_ntt(&mut data, &[]).is_err());
+    }
+
+    #[test]
+    fn test_invalid_size_zero() {
+        let gpu = match skip_if_no_metal() {
+            Some(g) => g,
+            None => return,
+        };
+        let mut data: Vec<M31> = vec![];
+        assert!(gpu.forward_ntt(&mut data, &[]).is_err());
+        assert!(gpu.inverse_ntt(&mut data, &[]).is_err());
+    }
+
+    #[test]
+    fn test_size_one_identity() {
+        let gpu = match skip_if_no_metal() {
+            Some(g) => g,
+            None => return,
+        };
+        let mut data = vec![M31(42)];
+        gpu.forward_ntt(&mut data, &[]).unwrap();
+        assert_eq!(data[0], M31(42));
+        gpu.inverse_ntt(&mut data, &[]).unwrap();
+        assert_eq!(data[0], M31(42));
+    }
+
+    #[test]
+    fn test_pointwise_mul() {
+        let gpu = match skip_if_no_metal() {
+            Some(g) => g,
+            None => return,
+        };
+        let a = vec![M31(2), M31(3), M31(4), M31(5)];
+        let b = vec![M31(10), M31(20), M31(30), M31(40)];
+        let mut out = vec![M31(0); 4];
+        gpu.pointwise_mul(&a, &b, &mut out).unwrap();
+        assert_eq!(out, vec![M31(20), M31(60), M31(120), M31(200)]);
+    }
+
+    #[test]
+    fn test_pointwise_mul_size_mismatch() {
+        let gpu = match skip_if_no_metal() {
+            Some(g) => g,
+            None => return,
+        };
+        let a = vec![M31(1); 4];
+        let b = vec![M31(1); 3];
+        let mut out = vec![M31(0); 4];
+        assert!(gpu.pointwise_mul(&a, &b, &mut out).is_err());
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────
 
     fn lcg_data(n: usize, seed: u64) -> Vec<M31> {
