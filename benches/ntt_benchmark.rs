@@ -34,9 +34,10 @@ const SIZES: &[usize] = &[
     1 << 20,  // 1M
 ];
 
-// Cooperative sweep uses fewer sizes (each sweep tests all split values)
-const COOP_WARMUP: usize = 3;
-const COOP_ITERATIONS: usize = 10;
+// Cooperative sweep: more iterations for statistical significance.
+// Each sweep tests all split values (0..log_n), so total calls = sizes * splits * (warmup+iters).
+const COOP_WARMUP: usize = 5;
+const COOP_ITERATIONS: usize = 20;
 const COOP_SIZES: &[usize] = &[
     1 << 10,  // 1K
     1 << 14,  // 16K
@@ -273,26 +274,22 @@ fn run_cooperative_sweep() {
         eprintln!("Cooperative sweep: size 2^{} ({} elements), {} split values...",
             log_n, size, log_n + 1);
 
+        let mut results: Vec<CoopBenchResult> = Vec::new();
         for split in 0..=log_n {
             let r = bench_cooperative(&coop, &input, log_n, split);
             println!("{},{},{},{:.1},{:.1},{:.1},{:.1},{:.1}",
                 r.size, r.log_n, r.split_layer,
                 r.median_total_us, r.median_cpu_us, r.median_gpu_us,
                 r.min_total_us, r.max_total_us);
+            results.push(r);
         }
 
-        // Find optimal split for this size
-        let mut best_split = 0;
-        let mut best_time = f64::MAX;
-        for split in 0..=log_n {
-            let r = bench_cooperative(&coop, &input, log_n, split);
-            if r.median_total_us < best_time {
-                best_time = r.median_total_us;
-                best_split = split;
-            }
-        }
+        // Find optimal split from already-measured results
+        let best = results.iter()
+            .min_by(|a, b| a.median_total_us.partial_cmp(&b.median_total_us).unwrap())
+            .unwrap();
         eprintln!("  Optimal split for 2^{}: {} (CPU does {} layers, GPU does {}) = {:.0} us",
-            log_n, best_split, best_split, log_n - best_split, best_time);
+            log_n, best.split_layer, best.split_layer, log_n - best.split_layer, best.median_total_us);
     }
 
     eprintln!();

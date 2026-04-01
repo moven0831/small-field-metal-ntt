@@ -497,13 +497,14 @@ mod tests {
 
         // All GPU: cpu_time should be ~0
         let r0 = cooperative_forward_ntt(&coop, &input, 10, 0).unwrap();
-        assert!(r0.cpu_time_us < 1.0, "split=0 should have near-zero CPU time");
+        // Generous threshold: skipped phase measures only Instant::now() overhead + OS jitter
+        assert!(r0.cpu_time_us < 100.0, "split=0 should have near-zero CPU time");
         assert!(r0.gpu_time_us > 0.0, "split=0 should have nonzero GPU time");
 
         // All CPU: gpu_time should be ~0
         let rk = cooperative_forward_ntt(&coop, &input, 10, 10).unwrap();
         assert!(rk.cpu_time_us > 0.0, "split=k should have nonzero CPU time");
-        assert!(rk.gpu_time_us < 1.0, "split=k should have near-zero GPU time");
+        assert!(rk.gpu_time_us < 100.0, "split=k should have near-zero GPU time");
 
         // Total should be >= max(cpu, gpu)
         let r5 = cooperative_forward_ntt(&coop, &input, 10, 5).unwrap();
