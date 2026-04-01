@@ -1,17 +1,19 @@
 // NTT Algorithm Shootout — Metal over M31 (Circle NTT)
 //
-// Compares 4 GPU variants + CPU reference:
-//   V1: CT-DIT radix-2 (naive baseline, all device memory)
-//   V2: CT-DIT/GS-DIF radix-2 (threadgroup memory, in-place)
-//   V3: Stockham radix-2 (out-of-place, ping-pong buffers)
-//   V4: CT-DIT/GS-DIF radix-4 (half the barriers)
+// Two benchmark modes:
+//   1. Algorithm shootout: 4 GPU variants + CPU reference (default)
+//   2. Cooperative split-point sweep: CPU-GPU partition at every layer (--cooperative)
 //
-// Run: cargo bench --release
+// Run:
+//   cargo bench                    # algorithm shootout
+//   cargo bench -- --cooperative   # split-point sweep
+//
 // Output: CSV to stdout, summary table to stderr
 
 use small_field_metal_ntt::field::m31::M31;
 use small_field_metal_ntt::field::Field;
 use small_field_metal_ntt::gpu::MetalContext;
+use small_field_metal_ntt::ntt::cooperative::{self, CooperativeNttContext};
 use small_field_metal_ntt::ntt::cpu_reference::CpuReferenceBackend;
 use small_field_metal_ntt::ntt::metal_ct_dit_r2::MetalCtDitR2;
 use small_field_metal_ntt::ntt::metal_ct_gs_r2::MetalCtGsR2;
@@ -26,6 +28,17 @@ const ITERATIONS: usize = 20;
 const SIZES: &[usize] = &[
     1 << 10,  // 1K
     1 << 12,  // 4K
+    1 << 14,  // 16K
+    1 << 16,  // 64K
+    1 << 18,  // 256K
+    1 << 20,  // 1M
+];
+
+// Cooperative sweep uses fewer sizes (each sweep tests all split values)
+const COOP_WARMUP: usize = 3;
+const COOP_ITERATIONS: usize = 10;
+const COOP_SIZES: &[usize] = &[
+    1 << 10,  // 1K
     1 << 14,  // 16K
     1 << 16,  // 64K
     1 << 18,  // 256K
@@ -89,7 +102,68 @@ fn bench_variant<F: Field>(
     }
 }
 
-fn main() {
+fn lcg_data_u32(n: usize, seed: u64) -> Vec<u32> {
+    let mut s = seed;
+    (0..n)
+        .map(|_| {
+            s = s.wrapping_mul(6364136223846793005).wrapping_add(1);
+            ((s >> 33) as u32) % M31::P
+        })
+        .collect()
+}
+
+/// Benchmark one split_layer value for the cooperative NTT.
+struct CoopBenchResult {
+    size: usize,
+    log_n: usize,
+    split_layer: usize,
+    median_total_us: f64,
+    median_cpu_us: f64,
+    median_gpu_us: f64,
+    min_total_us: f64,
+    max_total_us: f64,
+}
+
+fn bench_cooperative(
+    coop: &CooperativeNttContext,
+    input: &[u32],
+    log_n: usize,
+    split_layer: usize,
+) -> CoopBenchResult {
+    let n = input.len();
+    let mut totals = Vec::with_capacity(COOP_WARMUP + COOP_ITERATIONS);
+    let mut cpus = Vec::with_capacity(COOP_WARMUP + COOP_ITERATIONS);
+    let mut gpus = Vec::with_capacity(COOP_WARMUP + COOP_ITERATIONS);
+
+    for i in 0..(COOP_WARMUP + COOP_ITERATIONS) {
+        let result = cooperative::cooperative_forward_ntt(coop, input, log_n, split_layer)
+            .expect("Cooperative NTT failed");
+        if i >= COOP_WARMUP {
+            totals.push(result.total_time_us);
+            cpus.push(result.cpu_time_us);
+            gpus.push(result.gpu_time_us);
+        }
+    }
+
+    totals.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    cpus.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    gpus.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
+    let mid = totals.len() / 2;
+
+    CoopBenchResult {
+        size: n,
+        log_n,
+        split_layer,
+        median_total_us: totals[mid],
+        median_cpu_us: cpus[mid],
+        median_gpu_us: gpus[mid],
+        min_total_us: totals[0],
+        max_total_us: totals[totals.len() - 1],
+    }
+}
+
+fn run_algorithm_shootout() {
     let dir = shader_dir();
 
     // Print device info
@@ -116,27 +190,22 @@ fn main() {
 
         eprintln!("Benchmarking size 2^{} ({} elements)...", size.trailing_zeros(), size);
 
-        // CPU reference
         let r = bench_variant("cpu-reference", &cpu, &data, size);
         println!("{},{},{:.1},{:.1},{:.1},{:.1}", r.variant, r.size, r.median_us, r.min_us, r.max_us, r.throughput_melem_s);
         all_results.push(r);
 
-        // V1: CT-DIT r2 (naive)
         let r = bench_variant("v1-ct-dit-r2", &v1, &data, size);
         println!("{},{},{:.1},{:.1},{:.1},{:.1}", r.variant, r.size, r.median_us, r.min_us, r.max_us, r.throughput_melem_s);
         all_results.push(r);
 
-        // V2: CT-GS r2 (threadgroup)
         let r = bench_variant("v2-ct-gs-r2", &v2, &data, size);
         println!("{},{},{:.1},{:.1},{:.1},{:.1}", r.variant, r.size, r.median_us, r.min_us, r.max_us, r.throughput_melem_s);
         all_results.push(r);
 
-        // V3: Stockham r2 (out-of-place)
         let r = bench_variant("v3-stockham-r2", &v3, &data, size);
         println!("{},{},{:.1},{:.1},{:.1},{:.1}", r.variant, r.size, r.median_us, r.min_us, r.max_us, r.throughput_melem_s);
         all_results.push(r);
 
-        // V4: CT-GS r4 (radix-4)
         let r = bench_variant("v4-ct-gs-r4", &v4, &data, size);
         println!("{},{},{:.1},{:.1},{:.1},{:.1}", r.variant, r.size, r.median_us, r.min_us, r.max_us, r.throughput_melem_s);
         all_results.push(r);
@@ -168,7 +237,6 @@ fn main() {
 
     eprintln!("╚══════════════╩════════╩════════╩════════╩════════╩════════╩══════════════╝");
 
-    // Find winner at largest size
     let largest = SIZES.last().unwrap();
     let gpu_results: Vec<&BenchResult> = all_results
         .iter()
@@ -182,4 +250,61 @@ fn main() {
 
     eprintln!();
     eprintln!("Config: {} warmup + {} iterations per (variant, size) pair", WARMUP, ITERATIONS);
+}
+
+fn run_cooperative_sweep() {
+    let dir = shader_dir();
+
+    if let Ok(ctx) = MetalContext::new(&dir) {
+        let info = ctx.device_info();
+        eprintln!("GPU: {}", info);
+        eprintln!();
+    }
+
+    let coop = CooperativeNttContext::new(&dir).expect("Failed to init cooperative NTT");
+
+    // CSV header
+    println!("size,log_n,split_layer,median_total_us,median_cpu_us,median_gpu_us,min_total_us,max_total_us");
+
+    for &size in COOP_SIZES {
+        let log_n = size.trailing_zeros() as usize;
+        let input = lcg_data_u32(size, 12345 + size as u64);
+
+        eprintln!("Cooperative sweep: size 2^{} ({} elements), {} split values...",
+            log_n, size, log_n + 1);
+
+        for split in 0..=log_n {
+            let r = bench_cooperative(&coop, &input, log_n, split);
+            println!("{},{},{},{:.1},{:.1},{:.1},{:.1},{:.1}",
+                r.size, r.log_n, r.split_layer,
+                r.median_total_us, r.median_cpu_us, r.median_gpu_us,
+                r.min_total_us, r.max_total_us);
+        }
+
+        // Find optimal split for this size
+        let mut best_split = 0;
+        let mut best_time = f64::MAX;
+        for split in 0..=log_n {
+            let r = bench_cooperative(&coop, &input, log_n, split);
+            if r.median_total_us < best_time {
+                best_time = r.median_total_us;
+                best_split = split;
+            }
+        }
+        eprintln!("  Optimal split for 2^{}: {} (CPU does {} layers, GPU does {}) = {:.0} us",
+            log_n, best_split, best_split, log_n - best_split, best_time);
+    }
+
+    eprintln!();
+    eprintln!("Config: {} warmup + {} iterations per (size, split) pair", COOP_WARMUP, COOP_ITERATIONS);
+}
+
+fn main() {
+    let args: Vec<String> = std::env::args().collect();
+
+    if args.iter().any(|a| a == "--cooperative" || a == "--coop") {
+        run_cooperative_sweep();
+    } else {
+        run_algorithm_shootout();
+    }
 }
