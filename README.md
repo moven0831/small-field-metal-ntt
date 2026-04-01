@@ -16,7 +16,7 @@ The first open-source Metal NTT implementation for zero-knowledge proof fields, 
 ### Fields
 
 - **M31** (p = 2^31 - 1): Circle NTT (DCCT). Used by Stwo.
-- **BabyBear** (p = 2^31 - 2^27 + 1): standard NTT. Used by Plonky3. *(planned)*
+- **BabyBear** (p = 2^31 - 2^27 + 1): Montgomery reduction, standard NTT. Used by Plonky3.
 - **KoalaBear** (p = 2^31 - 2^24 + 1): standard NTT. Used by Whirlaway. *(planned)*
 
 ## Benchmark Results
@@ -83,6 +83,7 @@ All GPU variants use a two-phase strategy:
 - [x] Variant 3: Stockham radix-2, out-of-place ping-pong (PR #6)
 - [x] Variant 4: CT-DIT/GS-DIF radix-4, half barriers, odd-log_n fallback (PR #7)
 - [x] Benchmark harness: all variants head-to-head, CSV + summary (PR #8)
+- [x] BabyBear field: Montgomery reduction, standard NTT twiddles (PR #9)
 
 ### Next
 
@@ -99,7 +100,7 @@ All GPU variants use a two-phase strategy:
 - [ ] Batched small NTTs for lattice crypto (Kyber/Dilithium)
 - [ ] M31 extension field (Fp2) for Stwo production constraints
 - [ ] GPU timestamps via MTLCommandBuffer (blocked on metal-rs #329)
-- [ ] BabyBear + KoalaBear fields (standard NTT, not Circle)
+- [ ] KoalaBear field (standard NTT, not Circle)
 - [ ] CI with cargo bench on GitHub Actions macOS runner
 
 ## License
