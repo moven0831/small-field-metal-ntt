@@ -21,17 +21,17 @@ The first open-source Metal NTT implementation for zero-knowledge proof fields, 
 
 ## Benchmark Results
 
-Apple M3, optimized build. Median of 20 iterations, 5 warmup.
+Apple M3, optimized build. Median of 20 iterations, 5 warmup. Forward NTT over M31 (Circle NTT).
 
-| Variant | 2^10 | 2^14 | 2^16 | 2^20 |
-|---------|------|------|------|------|
-| CPU ref | 35 us | 907 us | 4.1 ms | 86.0 ms |
-| V1 CT-DIT r2 | 1865 us | 2888 us | 6.7 ms | 91.5 ms |
-| V2 CT-GS r2 | 240 us | 1395 us | 4.9 ms | 86.4 ms |
-| V3 Stockham | 242 us | 1574 us | 5.1 ms | 87.4 ms |
-| **V4 CT-GS r4** | **237 us** | **1385 us** | **4.7 ms** | **84.7 ms** |
+| Variant | 2^10 | 2^12 | 2^14 | 2^16 | 2^18 | 2^20 |
+|---------|------|------|------|------|------|------|
+| CPU ref | 35 us | 176 us | 879 us | 4.1 ms | 19.1 ms | 86.2 ms |
+| V1 CT-DIT r2 | 1916 us | 2354 us | 3743 us | 7.1 ms | 24.1 ms | 91.6 ms |
+| V2 CT-GS r2 | 240 us | 400 us | 1525 us | 5.3 ms | 20.1 ms | 87.8 ms |
+| V3 Stockham | 255 us | 415 us | 1676 us | 5.8 ms | 20.8 ms | 87.2 ms |
+| **V4 CT-GS r4** | **234 us** | **383 us** | **1420 us** | **5.4 ms** | **19.7 ms** | **85.2 ms** |
 
-**Winner: V4 (radix-4)** at all GPU sizes. 84.7 ms at 2^20 (12.4 Melem/s).
+**Winner: V4 (radix-4)** at all GPU sizes. 85.2 ms at 2^20 (12.3 Melem/s).
 
 ### Key Takeaways
 
@@ -52,7 +52,7 @@ Part of the [Ethereum GPU Acceleration Alliance (EGAA)](https://github.com/zkmop
 
 ```bash
 # Requires: macOS with Apple Silicon (M1+), Xcode command-line tools
-cargo test          # correctness tests (108 tests)
+cargo test          # correctness tests (132 tests)
 cargo bench         # full benchmark (CSV to stdout, table to stderr)
 ```
 
@@ -84,6 +84,7 @@ All GPU variants use a two-phase strategy:
 - [x] Variant 4: CT-DIT/GS-DIF radix-4, half barriers, forward+inverse (PR #7, #11)
 - [x] Benchmark harness: all variants head-to-head, CSV + summary (PR #8)
 - [x] BabyBear field: Montgomery reduction, standard NTT twiddles (PR #9)
+- [x] UMA cache coherency verified: CPU-GPU shared buffer works without flush (PR #10)
 
 ### Next
 
