@@ -17,6 +17,7 @@ using namespace metal;
 constant uint BB_P = 0x78000001u;           // 2013265921
 constant uint BB_MONTY_CONST = 0x77FFFFFFu; // -p^{-1} mod 2^32 = 2013265919
 constant uint BB_R_MOD_P = 0x0FFFFFFEu;     // R mod p = 268435454 (Montgomery form of 1)
+constant uint BB_R2_MOD_P = 0x45DDDDE3u;   // R^2 mod p = 1172168163 (for to_monty on GPU)
 
 // Montgomery reduction: given T (a ulong), compute T * R^{-1} mod p.
 inline uint bb_monty_reduce(ulong t) {

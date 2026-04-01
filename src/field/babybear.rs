@@ -295,14 +295,8 @@ mod tests {
 
     #[test]
     fn test_two_adic_generator_order() {
-        // The 2^27-th root of unity raised to 2^27 should equal 1.
+        // g^(2^27) should equal 1 (order divides 2^27).
         let g = BabyBear::two_adic_generator(TWO_ADICITY);
-        let mut val = g;
-        for _ in 1..TWO_ADICITY {
-            val = val.mul(val); // square 26 more times after the first
-        }
-        // After squaring 26 times: g^(2^26). Need to square once more.
-        // Actually let's just compute g^(2^27) directly.
         let mut val = g;
         for _ in 0..TWO_ADICITY {
             val = val.mul(val);

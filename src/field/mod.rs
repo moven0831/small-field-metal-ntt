@@ -23,7 +23,12 @@ pub trait Field: Copy + Clone + PartialEq + Eq + std::fmt::Debug {
     /// Field multiplication: (a * b) mod p
     fn mul(self, other: Self) -> Self;
 
-    /// Modular reduction from u64 intermediate.
+    /// Reduce a u64 value into the field's internal representation.
+    ///
+    /// For standard fields (M31), internal form = standard value.
+    /// For Montgomery fields (BabyBear), internal form = Montgomery encoding.
+    /// Callers should use field methods (add, mul, etc.) for arithmetic
+    /// and field-specific conversion (e.g., from_monty) for output.
     fn reduce(val: u64) -> Self;
 
     /// Modular inverse via Fermat's little theorem: a^(p-2) mod p
