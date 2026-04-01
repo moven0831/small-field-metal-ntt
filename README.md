@@ -52,7 +52,7 @@ Part of the [Ethereum GPU Acceleration Alliance (EGAA)](https://github.com/zkmop
 
 ```bash
 # Requires: macOS with Apple Silicon (M1+), Xcode command-line tools
-cargo test          # correctness tests (96 tests)
+cargo test          # correctness tests (108 tests)
 cargo bench         # full benchmark (CSV to stdout, table to stderr)
 ```
 
@@ -64,8 +64,8 @@ trait NttBackend<F: Field>
   +-- CpuReferenceBackend (forward + inverse)
   +-- MetalCtDitR2        (V1: naive baseline)
   +-- MetalCtGsR2         (V2: in-place, forward + inverse)
-  +-- MetalStockhamR2     (V3: out-of-place, forward only)
-  +-- MetalCtGsR4         (V4: radix-4, forward only)
+  +-- MetalStockhamR2     (V3: out-of-place, forward + inverse)
+  +-- MetalCtGsR4         (V4: radix-4, forward + inverse)
 ```
 
 All GPU variants use a two-phase strategy:
@@ -80,8 +80,8 @@ All GPU variants use a two-phase strategy:
 - [x] Metal GPU infrastructure: device, shaders, dispatch (PR #2)
 - [x] Variant 1: CT-DIT radix-2, naive baseline (PR #4)
 - [x] Variant 2: CT-DIT/GS-DIF radix-2, threadgroup memory, forward+inverse (PR #5)
-- [x] Variant 3: Stockham radix-2, out-of-place ping-pong (PR #6)
-- [x] Variant 4: CT-DIT/GS-DIF radix-4, half barriers, odd-log_n fallback (PR #7)
+- [x] Variant 3: Stockham radix-2, out-of-place ping-pong, forward+inverse (PR #6, #11)
+- [x] Variant 4: CT-DIT/GS-DIF radix-4, half barriers, forward+inverse (PR #7, #11)
 - [x] Benchmark harness: all variants head-to-head, CSV + summary (PR #8)
 - [x] BabyBear field: Montgomery reduction, standard NTT twiddles (PR #9)
 

@@ -13,15 +13,13 @@ use crate::field::Field;
 /// across algorithm families and future multi-platform support.
 ///
 /// ```text
-///                    trait NttBackend
-///                          |
-///            +-------------+-------------+
-///            |             |             |
-///     MetalBackend   CpuNeonBackend  (future: VulkanBackend)
-///     ├── ct_dit_r2
-///     ├── ct_gs_r2
-///     ├── stockham_r2
-///     └── ct_gs_r4
+/// trait NttBackend<F: Field>
+///   |
+///   +-- CpuReferenceBackend       (forward + inverse)
+///   +-- MetalCtDitR2              (V1: naive baseline, forward only)
+///   +-- MetalCtGsR2              (V2: in-place, forward + inverse)
+///   +-- MetalStockhamR2          (V3: out-of-place, forward + inverse)
+///   +-- MetalCtGsR4              (V4: radix-4, forward + inverse)
 /// ```
 pub trait NttBackend<F: Field> {
     /// Algorithm variant name for reporting.

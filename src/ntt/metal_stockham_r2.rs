@@ -32,6 +32,9 @@ pub struct MetalStockhamR2 {
     ctx: MetalContext,
     forward_tg_pipeline: ComputePipelineState,
     forward_device_pipeline: ComputePipelineState,
+    inverse_tg_pipeline: ComputePipelineState,
+    inverse_device_pipeline: ComputePipelineState,
+    normalize_pipeline: ComputePipelineState,
 }
 
 impl MetalStockhamR2 {
@@ -39,11 +42,17 @@ impl MetalStockhamR2 {
         let ctx = MetalContext::new(shader_dir)?;
         let forward_tg = ctx.make_pipeline("stockham_r2_forward_tg")?;
         let forward_dev = ctx.make_pipeline("stockham_r2_butterfly_device")?;
+        let inverse_tg = ctx.make_pipeline("stockham_r2_inverse_tg")?;
+        let inverse_dev = ctx.make_pipeline("stockham_r2_butterfly_device_inv")?;
+        let normalize = ctx.make_pipeline("stockham_r2_normalize")?;
 
         Ok(MetalStockhamR2 {
             ctx,
             forward_tg_pipeline: forward_tg,
             forward_device_pipeline: forward_dev,
+            inverse_tg_pipeline: inverse_tg,
+            inverse_device_pipeline: inverse_dev,
+            normalize_pipeline: normalize,
         })
     }
 
@@ -172,6 +181,154 @@ impl MetalStockhamR2 {
         let result = MetalContext::read_buffer(result_buf, n);
         Ok((result, total_ns))
     }
+
+    /// Run inverse Circle NTT (GS-DIF, out-of-place) on GPU.
+    /// Returns (result_data, total_gpu_time_ns).
+    pub fn inverse_ntt_gpu(
+        &self,
+        input: &[u32],
+        log_n: usize,
+    ) -> Result<(Vec<u32>, u64), NttError> {
+        let n = input.len();
+        if n != (1 << log_n) {
+            return Err(NttError::InvalidSize(n));
+        }
+        if log_n > 30 {
+            return Err(NttError::InvalidSize(n));
+        }
+        if log_n == 0 {
+            return Ok((input.to_vec(), 0));
+        }
+
+        let coset = Coset::odds(log_n as u32);
+        let itwiddles = generate_itwiddles(&coset);
+
+        // Allocate two device buffers for ping-pong
+        let buf_a = self.ctx.buffer_from_slice(input)?;
+        let buf_b = self.ctx.alloc_buffer(n * std::mem::size_of::<u32>())?;
+        let mut total_ns: u64 = 0;
+
+        let tile_log = log_n.min(MAX_TILE_LOG);
+
+        // Track which buffer is current input vs output
+        let mut read_from_a = true;
+
+        // ── Phase 1: threadgroup stages (small strides) ────────────────
+        // Inverse: layers from 0 up to (tile_log-1)
+        if tile_log > 0 {
+            let num_tg_layers = tile_log;
+            let start_layer = 0;
+
+            // Flatten inverse twiddles (processing order: low to high)
+            let mut flat_tw = Vec::new();
+            let mut tw_offsets = Vec::new();
+            for li in 0..num_tg_layers {
+                let layer = start_layer + li;
+                tw_offsets.push(flat_tw.len() as u32);
+                flat_tw.extend(itwiddles[layer].iter().map(|m| m.0));
+            }
+            let buf_tw = self.ctx.buffer_from_slice(&flat_tw)?;
+
+            // params: [tile_log, num_layers, start_layer, offsets...]
+            let mut params: Vec<u32> = vec![
+                tile_log as u32,
+                num_tg_layers as u32,
+                start_layer as u32,
+            ];
+            params.extend(tw_offsets);
+            let buf_p = self.ctx.buffer_from_slice(&params)?;
+
+            let tile_size = 1usize << tile_log;
+            let num_tiles = n / tile_size;
+            let max_tg_threads =
+                MetalContext::max_threads_per_threadgroup(&self.inverse_tg_pipeline) as u64;
+            let threads = max_tg_threads.min(tile_size as u64 / 2).max(1);
+
+            let tg = MTLSize::new(num_tiles as u64, 1, 1);
+            let tpg = MTLSize::new(threads, 1, 1);
+
+            let (cur_in, cur_out) = if read_from_a {
+                (&buf_a, &buf_b)
+            } else {
+                (&buf_b, &buf_a)
+            };
+
+            let ns = self.ctx.dispatch_and_wait(
+                &self.inverse_tg_pipeline,
+                &[cur_in, cur_out, &buf_tw, &buf_p],
+                tg,
+                tpg,
+            )?;
+            total_ns += ns;
+            read_from_a = !read_from_a;
+        }
+
+        // ── Phase 2: device-memory stages (large strides) ──────────────
+        // Inverse: layers from tile_log up to (log_n-1)
+        let max_tpg =
+            MetalContext::max_threads_per_threadgroup(&self.inverse_device_pipeline) as u64;
+        let tpg_width = max_tpg.min(256);
+
+        for layer in tile_log..log_n {
+            let stride = 1usize << layer;
+            let num_butterflies = (n / 2) as u64;
+
+            let tw_data: Vec<u32> = itwiddles[layer].iter().map(|m| m.0).collect();
+            let buf_tw = self.ctx.buffer_from_slice(&tw_data)?;
+            let params: Vec<u32> = vec![stride as u32, n as u32];
+            let buf_p = self.ctx.buffer_from_slice(&params)?;
+
+            let tg = MTLSize::new(
+                (num_butterflies + tpg_width - 1) / tpg_width,
+                1,
+                1,
+            );
+            let tpg = MTLSize::new(tpg_width.min(num_butterflies), 1, 1);
+
+            let (cur_in, cur_out) = if read_from_a {
+                (&buf_a, &buf_b)
+            } else {
+                (&buf_b, &buf_a)
+            };
+
+            let ns = self.ctx.dispatch_and_wait(
+                &self.inverse_device_pipeline,
+                &[cur_in, cur_out, &buf_tw, &buf_p],
+                tg,
+                tpg,
+            )?;
+            total_ns += ns;
+            read_from_a = !read_from_a;
+        }
+
+        // ── Normalize: multiply all elements by inv_n ──────────────────
+        // Normalize is in-place on whichever buffer holds the result
+        let result_buf = if read_from_a { &buf_a } else { &buf_b };
+        let inv_n = M31::reduce(n as u64).inv();
+        let norm_params: Vec<u32> = vec![n as u32, inv_n.0];
+        let buf_norm_p = self.ctx.buffer_from_slice(&norm_params)?;
+
+        let norm_max_tpg =
+            MetalContext::max_threads_per_threadgroup(&self.normalize_pipeline) as u64;
+        let norm_tpg_width = norm_max_tpg.min(256);
+        let norm_tg = MTLSize::new(
+            (n as u64 + norm_tpg_width - 1) / norm_tpg_width,
+            1,
+            1,
+        );
+        let norm_tpg = MTLSize::new(norm_tpg_width.min(n as u64), 1, 1);
+
+        let ns = self.ctx.dispatch_and_wait(
+            &self.normalize_pipeline,
+            &[result_buf, &buf_norm_p],
+            norm_tg,
+            norm_tpg,
+        )?;
+        total_ns += ns;
+
+        let result = MetalContext::read_buffer(result_buf, n);
+        Ok((result, total_ns))
+    }
 }
 
 impl NttBackend<M31> for MetalStockhamR2 {
@@ -197,10 +354,22 @@ impl NttBackend<M31> for MetalStockhamR2 {
         Ok(())
     }
 
-    fn inverse_ntt(&self, _data: &mut [M31], _twiddles: &[M31]) -> Result<(), NttError> {
-        Err(NttError::GpuExecutionError(
-            "Inverse NTT not implemented for Stockham — forward-only benchmark variant".into(),
-        ))
+    fn inverse_ntt(&self, data: &mut [M31], _twiddles: &[M31]) -> Result<(), NttError> {
+        let n = data.len();
+        if n == 0 || (n & (n - 1)) != 0 {
+            return Err(NttError::InvalidSize(n));
+        }
+        if n == 1 {
+            return Ok(());
+        }
+        let log_n = n.trailing_zeros() as usize;
+
+        let input: Vec<u32> = data.iter().map(|m| m.0).collect();
+        let (result, _) = self.inverse_ntt_gpu(&input, log_n)?;
+        for (i, val) in result.iter().enumerate() {
+            data[i] = M31(*val);
+        }
+        Ok(())
     }
 
     fn pointwise_mul(&self, a: &[M31], b: &[M31], out: &mut [M31]) -> Result<(), NttError> {
@@ -232,6 +401,27 @@ fn generate_twiddles(coset: &Coset) -> Vec<Vec<M31>> {
                 } else {
                     p.x
                 }
+            })
+            .collect();
+        result.push(layer_tw);
+        current = current.double();
+    }
+    result
+}
+
+fn generate_itwiddles(coset: &Coset) -> Vec<Vec<M31>> {
+    let log_n = coset.log_size as usize;
+    let mut result = Vec::with_capacity(log_n);
+    let mut current = coset.clone();
+
+    for layer_idx in 0..log_n {
+        let half_size = current.size() / 2;
+        let is_last = layer_idx == log_n - 1;
+        let layer_tw: Vec<M31> = (0..half_size)
+            .map(|i| {
+                let p = current.at(bit_reverse_idx(i, current.log_size - 1));
+                let t = if is_last { p.y } else { p.x };
+                t.inv()
             })
             .collect();
         result.push(layer_tw);
@@ -449,14 +639,99 @@ mod tests {
         assert_eq!(data[0], M31(42));
     }
 
+    // ── Round-trip: forward + inverse = identity ─────────────────────────
+
     #[test]
-    fn test_inverse_returns_err() {
+    fn test_roundtrip_size4() {
         let gpu = match skip_if_no_metal() {
             Some(g) => g,
             None => return,
         };
-        let mut data = vec![M31(1), M31(2), M31(3), M31(4)];
-        assert!(gpu.inverse_ntt(&mut data, &[]).is_err());
+        let original = vec![M31(1), M31(2), M31(3), M31(4)];
+        let mut data = original.clone();
+        gpu.forward_ntt(&mut data, &[]).unwrap();
+        assert_ne!(data, original, "Forward should change data");
+        gpu.inverse_ntt(&mut data, &[]).unwrap();
+        assert_eq!(data, original, "Round-trip failed at size 4");
+    }
+
+    #[test]
+    fn test_roundtrip_size256() {
+        let gpu = match skip_if_no_metal() {
+            Some(g) => g,
+            None => return,
+        };
+        let original: Vec<M31> = (0..256).map(|i| M31(i * 7 + 3)).collect();
+        let mut data = original.clone();
+        gpu.forward_ntt(&mut data, &[]).unwrap();
+        gpu.inverse_ntt(&mut data, &[]).unwrap();
+        assert_eq!(data, original, "Round-trip failed at size 256");
+    }
+
+    #[test]
+    fn test_roundtrip_size1024() {
+        let gpu = match skip_if_no_metal() {
+            Some(g) => g,
+            None => return,
+        };
+        let original: Vec<M31> = (0..1024).map(|i| M31((i * 13 + 7) % M31::P)).collect();
+        let mut data = original.clone();
+        gpu.forward_ntt(&mut data, &[]).unwrap();
+        gpu.inverse_ntt(&mut data, &[]).unwrap();
+        assert_eq!(data, original, "Round-trip failed at size 1024");
+    }
+
+    #[test]
+    fn test_roundtrip_size8192() {
+        let gpu = match skip_if_no_metal() {
+            Some(g) => g,
+            None => return,
+        };
+        let original: Vec<M31> = lcg_data(8192, 33333);
+        let mut data = original.clone();
+        gpu.forward_ntt(&mut data, &[]).unwrap();
+        gpu.inverse_ntt(&mut data, &[]).unwrap();
+        assert_eq!(data, original, "Round-trip failed at size 8192");
+    }
+
+    #[test]
+    fn test_roundtrip_size16384() {
+        let gpu = match skip_if_no_metal() {
+            Some(g) => g,
+            None => return,
+        };
+        let original: Vec<M31> = lcg_data(16384, 44444);
+        let mut data = original.clone();
+        gpu.forward_ntt(&mut data, &[]).unwrap();
+        gpu.inverse_ntt(&mut data, &[]).unwrap();
+        assert_eq!(data, original, "Round-trip failed at size 16384");
+    }
+
+    #[test]
+    fn test_roundtrip_size2() {
+        let gpu = match skip_if_no_metal() {
+            Some(g) => g,
+            None => return,
+        };
+        let original = vec![M31(100), M31(200)];
+        let mut data = original.clone();
+        gpu.forward_ntt(&mut data, &[]).unwrap();
+        gpu.inverse_ntt(&mut data, &[]).unwrap();
+        assert_eq!(data, original, "Round-trip failed at size 2");
+    }
+
+    #[test]
+    fn test_roundtrip_size4096() {
+        // Exactly one TG tile (MAX_TILE_LOG=12) — no device phase
+        let gpu = match skip_if_no_metal() {
+            Some(g) => g,
+            None => return,
+        };
+        let original: Vec<M31> = lcg_data(4096, 55555);
+        let mut data = original.clone();
+        gpu.forward_ntt(&mut data, &[]).unwrap();
+        gpu.inverse_ntt(&mut data, &[]).unwrap();
+        assert_eq!(data, original, "Round-trip failed at size 4096");
     }
 
     #[test]
