@@ -41,7 +41,7 @@ impl MetalCtGsR4 {
         let inverse_tg = ctx.make_pipeline("ct_gs_r4_inverse_tg")?;
         let r4_dev_inv = ctx.make_pipeline("ct_gs_r4_butterfly_device_inv")?;
         let r2_dev_inv = ctx.make_pipeline("ct_gs_r4_r2_device_inv")?;
-        let normalize = ctx.make_pipeline("ct_gs_r2_normalize")?;
+        let normalize = ctx.make_pipeline("ct_gs_r4_normalize")?;
 
         Ok(MetalCtGsR4 {
             ctx,
@@ -908,6 +908,20 @@ mod tests {
         gpu.forward_ntt(&mut data, &[]).unwrap();
         gpu.inverse_ntt(&mut data, &[]).unwrap();
         assert_eq!(data, original, "Round-trip failed at size 16384");
+    }
+
+    #[test]
+    fn test_roundtrip_size32768() {
+        // log_n=15 (odd, 2 device layers): exercises ct_gs_r4_butterfly_device_inv
+        let gpu = match skip_if_no_metal() {
+            Some(g) => g,
+            None => return,
+        };
+        let original: Vec<M31> = lcg_data(32768, 55555);
+        let mut data = original.clone();
+        gpu.forward_ntt(&mut data, &[]).unwrap();
+        gpu.inverse_ntt(&mut data, &[]).unwrap();
+        assert_eq!(data, original, "Round-trip failed at size 32768");
     }
 
     #[test]

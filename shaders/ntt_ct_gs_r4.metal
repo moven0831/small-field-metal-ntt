@@ -390,4 +390,18 @@ kernel void ct_gs_r4_r2_device_inv(
     data[idx1] = m31_mul(m31_sub(a, b), tw);
 }
 
+/// Normalization: multiply every element by a scalar (n^-1 mod p).
+/// params[0] = n (element count)
+/// params[1] = scalar (the inverse of n in M31)
+kernel void ct_gs_r4_normalize(
+    device uint* data            [[buffer(0)]],
+    device const uint* params    [[buffer(1)]],
+    uint tid                     [[thread_position_in_grid]]
+) {
+    uint n      = params[0];
+    uint scalar = params[1];
+    if (tid >= n) return;
+    data[tid] = m31_mul(data[tid], scalar);
+}
+
 #endif // NTT_CT_GS_R4_H

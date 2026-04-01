@@ -708,6 +708,33 @@ mod tests {
     }
 
     #[test]
+    fn test_roundtrip_size2() {
+        let gpu = match skip_if_no_metal() {
+            Some(g) => g,
+            None => return,
+        };
+        let original = vec![M31(100), M31(200)];
+        let mut data = original.clone();
+        gpu.forward_ntt(&mut data, &[]).unwrap();
+        gpu.inverse_ntt(&mut data, &[]).unwrap();
+        assert_eq!(data, original, "Round-trip failed at size 2");
+    }
+
+    #[test]
+    fn test_roundtrip_size4096() {
+        // Exactly one TG tile (MAX_TILE_LOG=12) — no device phase
+        let gpu = match skip_if_no_metal() {
+            Some(g) => g,
+            None => return,
+        };
+        let original: Vec<M31> = lcg_data(4096, 55555);
+        let mut data = original.clone();
+        gpu.forward_ntt(&mut data, &[]).unwrap();
+        gpu.inverse_ntt(&mut data, &[]).unwrap();
+        assert_eq!(data, original, "Round-trip failed at size 4096");
+    }
+
+    #[test]
     fn test_pointwise_mul() {
         let gpu = match skip_if_no_metal() {
             Some(g) => g,
