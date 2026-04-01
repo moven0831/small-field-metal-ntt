@@ -58,3 +58,34 @@ kernel void butterfly_forward_kernel(
     data[idx0] = m31_add(a, t);
     data[idx1] = m31_sub(a, t);
 }
+
+/// Cache coherency test: XOR each element with a constant.
+/// Cache coherency test: XOR each element with a constant.
+/// params[0] = n (element count)
+/// params[1] = xor_val (the XOR constant)
+kernel void cache_coherency_xor(
+    device uint* data [[buffer(0)]],
+    device const uint* params [[buffer(1)]],
+    uint tid [[thread_position_in_grid]]
+) {
+    uint n = params[0];
+    uint xor_val = params[1];
+    if (tid < n) {
+        data[tid] = data[tid] ^ xor_val;
+    }
+}
+
+/// Cache coherency test: GPU writes a known pattern.
+/// Cache coherency test: GPU writes a known pattern.
+/// params[0] = n (element count)
+/// NOTE: 1-element params buffer (unlike cache_coherency_xor which uses 2).
+kernel void cache_coherency_write(
+    device uint* data [[buffer(0)]],
+    device const uint* params [[buffer(1)]],
+    uint tid [[thread_position_in_grid]]
+) {
+    uint n = params[0];
+    if (tid < n) {
+        data[tid] = tid * 0x9E3779B9u + 0xCAFEBABEu;
+    }
+}
