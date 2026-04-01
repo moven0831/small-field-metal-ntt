@@ -11,9 +11,15 @@ fn shader_dir() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("shaders")
 }
 
-fn skip_if_no_metal() -> Option<MetalContext> {
+fn skip_if_no_uma_metal() -> Option<MetalContext> {
     match MetalContext::new(&shader_dir()) {
-        Ok(ctx) => Some(ctx),
+        Ok(ctx) => {
+            if !ctx.device_info().has_unified_memory {
+                eprintln!("Not a UMA device — skipping cache coherency test");
+                return None;
+            }
+            Some(ctx)
+        }
         Err(_) => {
             eprintln!("No Metal device — skipping GPU test");
             None
@@ -28,7 +34,7 @@ fn skip_if_no_metal() -> Option<MetalContext> {
 /// each element, then reads back from the CPU and verifies.
 #[test]
 fn test_cpu_write_gpu_read_cpu_readback() {
-    let ctx = match skip_if_no_metal() {
+    let ctx = match skip_if_no_uma_metal() {
         Some(c) => c,
         None => return,
     };
@@ -46,6 +52,10 @@ fn test_cpu_write_gpu_read_cpu_readback() {
             *ptr.add(i) = (i as u32).wrapping_mul(0x9E3779B9).wrapping_add(0xDEADBEEF);
         }
     }
+    // Compiler fence: ensure CPU stores are not reordered past the GPU dispatch.
+    // Metal's command submission provides the hardware fence on UMA, but the Rust
+    // compiler could theoretically sink raw pointer stores past safe function calls.
+    std::sync::atomic::fence(std::sync::atomic::Ordering::Release);
 
     // Prepare params buffer: [n, xor_val]
     let params = ctx.buffer_from_slice(&[n as u32, xor_val]).unwrap();
@@ -78,7 +88,7 @@ fn test_cpu_write_gpu_read_cpu_readback() {
 /// then the CPU reads it back after waitUntilCompleted() and verifies.
 #[test]
 fn test_gpu_write_cpu_read() {
-    let ctx = match skip_if_no_metal() {
+    let ctx = match skip_if_no_uma_metal() {
         Some(c) => c,
         None => return,
     };
@@ -114,7 +124,7 @@ fn test_gpu_write_cpu_read() {
 /// minimum-size issues with cache coherency.
 #[test]
 fn test_small_buffer_coherency() {
-    let ctx = match skip_if_no_metal() {
+    let ctx = match skip_if_no_uma_metal() {
         Some(c) => c,
         None => return,
     };

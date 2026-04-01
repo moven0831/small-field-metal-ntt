@@ -60,7 +60,9 @@ kernel void butterfly_forward_kernel(
 }
 
 /// Cache coherency test: XOR each element with a constant.
-/// CPU writes data, GPU XORs, CPU reads back.
+/// Cache coherency test: XOR each element with a constant.
+/// params[0] = n (element count)
+/// params[1] = xor_val (the XOR constant)
 kernel void cache_coherency_xor(
     device uint* data [[buffer(0)]],
     device const uint* params [[buffer(1)]],
@@ -74,7 +76,9 @@ kernel void cache_coherency_xor(
 }
 
 /// Cache coherency test: GPU writes a known pattern.
-/// CPU reads back after waitUntilCompleted.
+/// Cache coherency test: GPU writes a known pattern.
+/// params[0] = n (element count)
+/// NOTE: 1-element params buffer (unlike cache_coherency_xor which uses 2).
 kernel void cache_coherency_write(
     device uint* data [[buffer(0)]],
     device const uint* params [[buffer(1)]],
