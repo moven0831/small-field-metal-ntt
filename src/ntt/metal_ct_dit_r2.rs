@@ -52,21 +52,22 @@ impl MetalCtDitR2 {
         let twiddles = self.twiddle_cache.forward(log_n as u32);
 
         let buf_data = self.ctx.buffer_from_slice(input)?;
-        let mut total_ns: u64 = 0;
+        let cmd = self.ctx.begin_batch();
 
         // Process layers from log_n-1 down to 0 (same order as CPU reference forward)
         for layer in (0..log_n).rev() {
             let stride = 1usize << layer;
-            let ns = self.ctx.dispatch_butterfly_r2(
+            self.ctx.encode_butterfly_r2(
+                cmd,
                 &self.butterfly_pipeline,
                 &buf_data,
                 &twiddles[layer],
                 stride,
                 n,
             )?;
-            total_ns += ns;
         }
 
+        let total_ns = MetalContext::submit_batch(cmd)?;
         let result = MetalContext::read_buffer(&buf_data, n);
         Ok((result, total_ns))
     }

@@ -81,7 +81,7 @@ impl MetalStockhamR2 {
         // Allocate two device buffers for ping-pong
         let buf_a = self.ctx.buffer_from_slice(input)?;
         let buf_b = self.ctx.alloc_buffer(n * std::mem::size_of::<u32>())?;
-        let mut total_ns: u64 = 0;
+        let cmd = self.ctx.begin_batch();
 
         let tile_log = log_n.min(MAX_TILE_LOG);
 
@@ -117,13 +117,13 @@ impl MetalStockhamR2 {
                 (&buf_b, &buf_a)
             };
 
-            let ns = self.ctx.dispatch_and_wait(
+            MetalContext::encode_dispatch(
+                cmd,
                 &self.forward_device_pipeline,
                 &[cur_in, cur_out, &buf_tw, &buf_p],
                 tg,
                 tpg,
-            )?;
-            total_ns += ns;
+            );
             read_from_a = !read_from_a;
         }
 
@@ -167,17 +167,18 @@ impl MetalStockhamR2 {
                 (&buf_b, &buf_a)
             };
 
-            let ns = self.ctx.dispatch_and_wait(
+            MetalContext::encode_dispatch(
+                cmd,
                 &self.forward_tg_pipeline,
                 &[cur_in, cur_out, &buf_tw, &buf_p],
                 tg,
                 tpg,
-            )?;
-            total_ns += ns;
+            );
             read_from_a = !read_from_a;
         }
 
         // Result is in whichever buffer was last written to
+        let total_ns = MetalContext::submit_batch(cmd)?;
         let result_buf = if read_from_a { &buf_a } else { &buf_b };
         let result = MetalContext::read_buffer(result_buf, n);
         Ok((result, total_ns))
@@ -206,7 +207,7 @@ impl MetalStockhamR2 {
         // Allocate two device buffers for ping-pong
         let buf_a = self.ctx.buffer_from_slice(input)?;
         let buf_b = self.ctx.alloc_buffer(n * std::mem::size_of::<u32>())?;
-        let mut total_ns: u64 = 0;
+        let cmd = self.ctx.begin_batch();
 
         let tile_log = log_n.min(MAX_TILE_LOG);
 
@@ -253,13 +254,13 @@ impl MetalStockhamR2 {
                 (&buf_b, &buf_a)
             };
 
-            let ns = self.ctx.dispatch_and_wait(
+            MetalContext::encode_dispatch(
+                cmd,
                 &self.inverse_tg_pipeline,
                 &[cur_in, cur_out, &buf_tw, &buf_p],
                 tg,
                 tpg,
-            )?;
-            total_ns += ns;
+            );
             read_from_a = !read_from_a;
         }
 
@@ -291,13 +292,13 @@ impl MetalStockhamR2 {
                 (&buf_b, &buf_a)
             };
 
-            let ns = self.ctx.dispatch_and_wait(
+            MetalContext::encode_dispatch(
+                cmd,
                 &self.inverse_device_pipeline,
                 &[cur_in, cur_out, &buf_tw, &buf_p],
                 tg,
                 tpg,
-            )?;
-            total_ns += ns;
+            );
             read_from_a = !read_from_a;
         }
 
@@ -305,14 +306,15 @@ impl MetalStockhamR2 {
         // Normalize is in-place on whichever buffer holds the result
         let result_buf = if read_from_a { &buf_a } else { &buf_b };
         let inv_n = M31::reduce(n as u64).inv();
-        let ns = self.ctx.dispatch_normalize(
+        self.ctx.encode_normalize(
+            cmd,
             &self.normalize_pipeline,
             result_buf,
             n,
             inv_n,
         )?;
-        total_ns += ns;
 
+        let total_ns = MetalContext::submit_batch(cmd)?;
         let result = MetalContext::read_buffer(result_buf, n);
         Ok((result, total_ns))
     }
