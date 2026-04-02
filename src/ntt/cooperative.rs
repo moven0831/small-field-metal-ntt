@@ -248,24 +248,13 @@ mod tests {
     use super::*;
     use crate::ntt::cpu_reference::CpuReferenceBackend;
     use crate::ntt::NttBackend;
-    use std::path::PathBuf;
+    use crate::ntt::test_utils::try_init_metal;
 
-    fn shader_dir() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("shaders")
+    fn init() -> Option<CooperativeNttContext> {
+        try_init_metal(|p| CooperativeNttContext::new(p))
     }
 
-    fn skip_if_no_metal() -> Option<CooperativeNttContext> {
-        match CooperativeNttContext::new(&shader_dir()) {
-            Ok(c) => Some(c),
-            Err(NttError::DeviceNotFound) => {
-                eprintln!("No Metal device — skipping");
-                None
-            }
-            Err(e) => panic!("Failed: {}", e),
-        }
-    }
-
-    fn lcg_data(n: usize, seed: u64) -> Vec<u32> {
+    fn lcg_data_u32(n: usize, seed: u64) -> Vec<u32> {
         let mut s = seed;
         (0..n)
             .map(|_| {
@@ -279,12 +268,12 @@ mod tests {
 
     #[test]
     fn test_split0_matches_cpu_size1024() {
-        let coop = match skip_if_no_metal() {
+        let coop = match init() {
             Some(c) => c,
             None => return,
         };
         let cpu = CpuReferenceBackend;
-        let input = lcg_data(1024, 11111);
+        let input = lcg_data_u32(1024, 11111);
         let mut cpu_data: Vec<M31> = input.iter().map(|&v| M31(v)).collect();
         cpu.forward_ntt(&mut cpu_data, &[]).unwrap();
 
@@ -295,12 +284,12 @@ mod tests {
 
     #[test]
     fn test_split0_matches_cpu_size16384() {
-        let coop = match skip_if_no_metal() {
+        let coop = match init() {
             Some(c) => c,
             None => return,
         };
         let cpu = CpuReferenceBackend;
-        let input = lcg_data(16384, 22222);
+        let input = lcg_data_u32(16384, 22222);
         let mut cpu_data: Vec<M31> = input.iter().map(|&v| M31(v)).collect();
         cpu.forward_ntt(&mut cpu_data, &[]).unwrap();
 
@@ -313,12 +302,12 @@ mod tests {
 
     #[test]
     fn test_split_all_cpu_size1024() {
-        let coop = match skip_if_no_metal() {
+        let coop = match init() {
             Some(c) => c,
             None => return,
         };
         let cpu = CpuReferenceBackend;
-        let input = lcg_data(1024, 33333);
+        let input = lcg_data_u32(1024, 33333);
         let mut cpu_data: Vec<M31> = input.iter().map(|&v| M31(v)).collect();
         cpu.forward_ntt(&mut cpu_data, &[]).unwrap();
 
@@ -329,12 +318,12 @@ mod tests {
 
     #[test]
     fn test_split_all_cpu_size16384() {
-        let coop = match skip_if_no_metal() {
+        let coop = match init() {
             Some(c) => c,
             None => return,
         };
         let cpu = CpuReferenceBackend;
-        let input = lcg_data(16384, 44444);
+        let input = lcg_data_u32(16384, 44444);
         let mut cpu_data: Vec<M31> = input.iter().map(|&v| M31(v)).collect();
         cpu.forward_ntt(&mut cpu_data, &[]).unwrap();
 
@@ -347,12 +336,12 @@ mod tests {
 
     #[test]
     fn test_split_1_size1024() {
-        let coop = match skip_if_no_metal() {
+        let coop = match init() {
             Some(c) => c,
             None => return,
         };
         let cpu = CpuReferenceBackend;
-        let input = lcg_data(1024, 55555);
+        let input = lcg_data_u32(1024, 55555);
         let mut cpu_data: Vec<M31> = input.iter().map(|&v| M31(v)).collect();
         cpu.forward_ntt(&mut cpu_data, &[]).unwrap();
 
@@ -363,12 +352,12 @@ mod tests {
 
     #[test]
     fn test_split_half_size1024() {
-        let coop = match skip_if_no_metal() {
+        let coop = match init() {
             Some(c) => c,
             None => return,
         };
         let cpu = CpuReferenceBackend;
-        let input = lcg_data(1024, 66666);
+        let input = lcg_data_u32(1024, 66666);
         let mut cpu_data: Vec<M31> = input.iter().map(|&v| M31(v)).collect();
         cpu.forward_ntt(&mut cpu_data, &[]).unwrap();
 
@@ -380,13 +369,13 @@ mod tests {
     #[test]
     fn test_split_sweep_size256() {
         // Test ALL split values for a small size
-        let coop = match skip_if_no_metal() {
+        let coop = match init() {
             Some(c) => c,
             None => return,
         };
         let cpu = CpuReferenceBackend;
         let log_n = 8;
-        let input = lcg_data(256, 77777);
+        let input = lcg_data_u32(256, 77777);
         let mut cpu_data: Vec<M31> = input.iter().map(|&v| M31(v)).collect();
         cpu.forward_ntt(&mut cpu_data, &[]).unwrap();
         let expected: Vec<u32> = cpu_data.iter().map(|m| m.0).collect();
@@ -404,13 +393,13 @@ mod tests {
     #[test]
     fn test_split_sweep_size4096() {
         // Test all split values at a larger size (exercises TG boundary)
-        let coop = match skip_if_no_metal() {
+        let coop = match init() {
             Some(c) => c,
             None => return,
         };
         let cpu = CpuReferenceBackend;
         let log_n = 12;
-        let input = lcg_data(4096, 88888);
+        let input = lcg_data_u32(4096, 88888);
         let mut cpu_data: Vec<M31> = input.iter().map(|&v| M31(v)).collect();
         cpu.forward_ntt(&mut cpu_data, &[]).unwrap();
         let expected: Vec<u32> = cpu_data.iter().map(|m| m.0).collect();
@@ -429,18 +418,18 @@ mod tests {
 
     #[test]
     fn test_split_invalid() {
-        let coop = match skip_if_no_metal() {
+        let coop = match init() {
             Some(c) => c,
             None => return,
         };
-        let input = lcg_data(1024, 99999);
+        let input = lcg_data_u32(1024, 99999);
         // split_layer > log_n should error
         assert!(cooperative_forward_ntt(&coop, &input, 10, 11).is_err());
     }
 
     #[test]
     fn test_size4_all_splits() {
-        let coop = match skip_if_no_metal() {
+        let coop = match init() {
             Some(c) => c,
             None => return,
         };
@@ -460,11 +449,11 @@ mod tests {
 
     #[test]
     fn test_timing_breakdown() {
-        let coop = match skip_if_no_metal() {
+        let coop = match init() {
             Some(c) => c,
             None => return,
         };
-        let input = lcg_data(1024, 12345);
+        let input = lcg_data_u32(1024, 12345);
 
         // All GPU: cpu_time should be ~0
         let r0 = cooperative_forward_ntt(&coop, &input, 10, 0).unwrap();

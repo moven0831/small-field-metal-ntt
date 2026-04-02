@@ -4,6 +4,8 @@ pub mod metal_ct_dit_r2;
 pub mod metal_ct_gs_r2;
 pub mod metal_ct_gs_r4;
 pub mod metal_stockham_r2;
+#[cfg(test)]
+pub mod test_utils;
 pub mod twiddles;
 
 use crate::field::Field;
