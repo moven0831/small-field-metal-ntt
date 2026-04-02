@@ -175,7 +175,11 @@ impl MetalContext {
 
     /// Compute 1D threadgroup/grid sizes for a given number of work items.
     /// Returns (threadgroups, threads_per_group).
-    pub fn compute_grid_1d(num_items: u64, max_tpg: u64) -> (MTLSize, MTLSize) {
+    ///
+    /// Both `num_items` and `max_tpg` must be > 0.
+    pub(crate) fn compute_grid_1d(num_items: u64, max_tpg: u64) -> (MTLSize, MTLSize) {
+        debug_assert!(num_items > 0, "compute_grid_1d: num_items must be > 0");
+        debug_assert!(max_tpg > 0, "compute_grid_1d: max_tpg must be > 0");
         let tpg = max_tpg.min(num_items);
         let groups = num_items.div_ceil(tpg);
         (MTLSize::new(groups, 1, 1), MTLSize::new(tpg, 1, 1))
