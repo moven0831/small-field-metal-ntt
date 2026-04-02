@@ -130,111 +130,22 @@ impl NttBackend<M31> for MetalCtDitR2 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ntt::cpu_reference::CpuReferenceBackend;
-    use crate::ntt::NttBackend;
-    use std::path::PathBuf;
+    use crate::ntt::test_utils::*;
 
-    fn shader_dir() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("shaders")
-    }
-
-    fn skip_if_no_metal() -> Option<MetalCtDitR2> {
-        match MetalCtDitR2::new(&shader_dir()) {
-            Ok(g) => Some(g),
-            Err(NttError::DeviceNotFound) => {
-                eprintln!("No Metal device — skipping");
-                None
-            }
-            Err(e) => panic!("Failed: {}", e),
-        }
+    fn init() -> Option<MetalCtDitR2> {
+        try_init_metal(|p| MetalCtDitR2::new(p))
     }
 
     #[test]
-    fn test_gpu_ntt_matches_cpu_size4() {
-        let gpu = match skip_if_no_metal() { Some(g) => g, None => return };
-        let cpu = CpuReferenceBackend;
-
-        let original = vec![M31(1), M31(2), M31(3), M31(4)];
-        let mut cpu_data = original.clone();
-        cpu.forward_ntt(&mut cpu_data, &[]).unwrap();
-        let mut gpu_data = original.clone();
-        gpu.forward_ntt(&mut gpu_data, &[]).unwrap();
-
-        assert_eq!(gpu_data, cpu_data, "GPU NTT mismatch at size 4");
+    fn test_forward_matches_cpu() {
+        let gpu = match init() { Some(g) => g, None => return };
+        assert_forward_matches_cpu(&gpu, &[4, 16, 256, 1024, 4096]);
     }
 
     #[test]
-    fn test_gpu_ntt_matches_cpu_size16() {
-        let gpu = match skip_if_no_metal() { Some(g) => g, None => return };
-        let cpu = CpuReferenceBackend;
-
-        let n = 16;
-        let original: Vec<M31> = (0..n).map(|i| M31(i as u32 * 7 + 3)).collect();
-        let mut cpu_data = original.clone();
-        cpu.forward_ntt(&mut cpu_data, &[]).unwrap();
-        let mut gpu_data = original.clone();
-        gpu.forward_ntt(&mut gpu_data, &[]).unwrap();
-
-        assert_eq!(gpu_data, cpu_data, "GPU NTT mismatch at size {}", n);
-    }
-
-    #[test]
-    fn test_gpu_ntt_matches_cpu_size256() {
-        let gpu = match skip_if_no_metal() { Some(g) => g, None => return };
-        let cpu = CpuReferenceBackend;
-
-        let n = 256;
-        let original: Vec<M31> = (0..n).map(|i| M31((i as u32 * 13 + 7) % M31::P)).collect();
-        let mut cpu_data = original.clone();
-        cpu.forward_ntt(&mut cpu_data, &[]).unwrap();
-        let mut gpu_data = original.clone();
-        gpu.forward_ntt(&mut gpu_data, &[]).unwrap();
-
-        assert_eq!(gpu_data, cpu_data, "GPU NTT mismatch at size {}", n);
-    }
-
-    #[test]
-    fn test_gpu_ntt_matches_cpu_size1024() {
-        let gpu = match skip_if_no_metal() { Some(g) => g, None => return };
-        let cpu = CpuReferenceBackend;
-
-        let n = 1024;
-        let original: Vec<M31> = (0..n).map(|i| M31((i as u32 * 17 + 11) % M31::P)).collect();
-        let mut cpu_data = original.clone();
-        cpu.forward_ntt(&mut cpu_data, &[]).unwrap();
-        let mut gpu_data = original.clone();
-        gpu.forward_ntt(&mut gpu_data, &[]).unwrap();
-
-        assert_eq!(gpu_data, cpu_data, "GPU NTT mismatch at size {}", n);
-    }
-
-    #[test]
-    fn test_gpu_ntt_matches_cpu_size4096() {
-        let gpu = match skip_if_no_metal() { Some(g) => g, None => return };
-        let cpu = CpuReferenceBackend;
-
-        let n = 4096;
-        let mut seed: u64 = 98765;
-        let original: Vec<M31> = (0..n)
-            .map(|_| {
-                seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
-                M31(((seed >> 33) as u32) % M31::P)
-            })
-            .collect();
-
-        let mut cpu_data = original.clone();
-        cpu.forward_ntt(&mut cpu_data, &[]).unwrap();
-        let mut gpu_data = original.clone();
-        gpu.forward_ntt(&mut gpu_data, &[]).unwrap();
-
-        assert_eq!(gpu_data, cpu_data, "GPU NTT mismatch at size {}", n);
-    }
-
-    #[test]
-    fn test_gpu_ntt_all_zeros() {
-        let gpu = match skip_if_no_metal() { Some(g) => g, None => return };
-        let mut data = vec![M31(0); 64];
-        gpu.forward_ntt(&mut data, &[]).unwrap();
-        assert!(data.iter().all(|&x| x == M31(0)));
+    fn test_forward_edge_cases() {
+        let gpu = match init() { Some(g) => g, None => return };
+        // V1 is forward-only (inverse is todo!()), so only test forward edge cases
+        assert_edge_cases(&gpu);
     }
 }

@@ -389,331 +389,50 @@ impl NttBackend<M31> for MetalStockhamR2 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ntt::cpu_reference::CpuReferenceBackend;
-    use crate::ntt::NttBackend;
-    use std::path::PathBuf;
+    use crate::ntt::test_utils::*;
 
-    fn shader_dir() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("shaders")
-    }
-
-    fn skip_if_no_metal() -> Option<MetalStockhamR2> {
-        match MetalStockhamR2::new(&shader_dir()) {
-            Ok(g) => Some(g),
-            Err(NttError::DeviceNotFound) => {
-                eprintln!("No Metal device — skipping");
-                None
-            }
-            Err(e) => panic!("Failed: {}", e),
-        }
-    }
-
-    // ── Forward NTT: GPU vs CPU reference ────────────────────────────────
-
-    #[test]
-    fn test_forward_matches_cpu_size4() {
-        let gpu = match skip_if_no_metal() {
-            Some(g) => g,
-            None => return,
-        };
-        let cpu = CpuReferenceBackend;
-        let original = vec![M31(1), M31(2), M31(3), M31(4)];
-        let mut cpu_data = original.clone();
-        cpu.forward_ntt(&mut cpu_data, &[]).unwrap();
-        let mut gpu_data = original.clone();
-        gpu.forward_ntt(&mut gpu_data, &[]).unwrap();
-        assert_eq!(gpu_data, cpu_data, "Forward mismatch at size 4");
+    fn init() -> Option<MetalStockhamR2> {
+        try_init_metal(|p| MetalStockhamR2::new(p))
     }
 
     #[test]
-    fn test_forward_matches_cpu_size16() {
-        let gpu = match skip_if_no_metal() {
-            Some(g) => g,
-            None => return,
-        };
-        let cpu = CpuReferenceBackend;
-        let n = 16;
-        let original: Vec<M31> = (0..n).map(|i| M31(i as u32 * 7 + 3)).collect();
-        let mut cpu_data = original.clone();
-        cpu.forward_ntt(&mut cpu_data, &[]).unwrap();
-        let mut gpu_data = original.clone();
-        gpu.forward_ntt(&mut gpu_data, &[]).unwrap();
-        assert_eq!(gpu_data, cpu_data, "Forward mismatch at size {}", n);
+    fn test_forward_matches_cpu() {
+        let gpu = match init() { Some(g) => g, None => return };
+        assert_forward_matches_cpu(&gpu, &[4, 16, 256, 1024, 4096, 8192, 16384]);
     }
 
     #[test]
-    fn test_forward_matches_cpu_size256() {
-        let gpu = match skip_if_no_metal() {
-            Some(g) => g,
-            None => return,
-        };
-        let cpu = CpuReferenceBackend;
-        let n = 256;
-        let original: Vec<M31> = (0..n).map(|i| M31((i as u32 * 13 + 7) % M31::P)).collect();
-        let mut cpu_data = original.clone();
-        cpu.forward_ntt(&mut cpu_data, &[]).unwrap();
-        let mut gpu_data = original.clone();
-        gpu.forward_ntt(&mut gpu_data, &[]).unwrap();
-        assert_eq!(gpu_data, cpu_data, "Forward mismatch at size {}", n);
+    fn test_roundtrip() {
+        let gpu = match init() { Some(g) => g, None => return };
+        assert_roundtrip(&gpu, &[4, 256, 1024, 8192, 16384]);
     }
 
     #[test]
-    fn test_forward_matches_cpu_size1024() {
-        let gpu = match skip_if_no_metal() {
-            Some(g) => g,
-            None => return,
-        };
-        let cpu = CpuReferenceBackend;
-        let n = 1024;
-        let original: Vec<M31> = (0..n).map(|i| M31((i as u32 * 17 + 11) % M31::P)).collect();
-        let mut cpu_data = original.clone();
-        cpu.forward_ntt(&mut cpu_data, &[]).unwrap();
-        let mut gpu_data = original.clone();
-        gpu.forward_ntt(&mut gpu_data, &[]).unwrap();
-        assert_eq!(gpu_data, cpu_data, "Forward mismatch at size {}", n);
-    }
-
-    #[test]
-    fn test_forward_matches_cpu_size4096() {
-        // Exactly one threadgroup tile
-        let gpu = match skip_if_no_metal() {
-            Some(g) => g,
-            None => return,
-        };
-        let cpu = CpuReferenceBackend;
-        let n = 4096;
-        let original: Vec<M31> = lcg_data(n, 98765);
-        let mut cpu_data = original.clone();
-        cpu.forward_ntt(&mut cpu_data, &[]).unwrap();
-        let mut gpu_data = original.clone();
-        gpu.forward_ntt(&mut gpu_data, &[]).unwrap();
-        assert_eq!(gpu_data, cpu_data, "Forward mismatch at size {}", n);
-    }
-
-    #[test]
-    fn test_forward_matches_cpu_size8192() {
-        // Two tiles (tests device phase + threadgroup phase)
-        let gpu = match skip_if_no_metal() {
-            Some(g) => g,
-            None => return,
-        };
-        let cpu = CpuReferenceBackend;
-        let n = 8192;
-        let original: Vec<M31> = lcg_data(n, 11111);
-        let mut cpu_data = original.clone();
-        cpu.forward_ntt(&mut cpu_data, &[]).unwrap();
-        let mut gpu_data = original.clone();
-        gpu.forward_ntt(&mut gpu_data, &[]).unwrap();
-        assert_eq!(gpu_data, cpu_data, "Forward mismatch at size {}", n);
-    }
-
-    #[test]
-    fn test_forward_matches_cpu_size16384() {
-        // Multiple device-phase dispatches + threadgroup
-        let gpu = match skip_if_no_metal() {
-            Some(g) => g,
-            None => return,
-        };
-        let cpu = CpuReferenceBackend;
-        let n = 16384;
-        let original: Vec<M31> = lcg_data(n, 22222);
-        let mut cpu_data = original.clone();
-        cpu.forward_ntt(&mut cpu_data, &[]).unwrap();
-        let mut gpu_data = original.clone();
-        gpu.forward_ntt(&mut gpu_data, &[]).unwrap();
-        assert_eq!(gpu_data, cpu_data, "Forward mismatch at size {}", n);
-    }
-
-    // ── Edge cases ───────────────────────────────────────────────────────
-
-    #[test]
-    fn test_all_zeros() {
-        let gpu = match skip_if_no_metal() {
-            Some(g) => g,
-            None => return,
-        };
-        let mut data = vec![M31(0); 64];
-        gpu.forward_ntt(&mut data, &[]).unwrap();
-        assert!(data.iter().all(|&x| x == M31(0)));
-    }
-
-    #[test]
-    fn test_size2() {
-        let gpu = match skip_if_no_metal() {
-            Some(g) => g,
-            None => return,
-        };
-        let cpu = CpuReferenceBackend;
-        let original = vec![M31(100), M31(200)];
-        let mut cpu_data = original.clone();
-        cpu.forward_ntt(&mut cpu_data, &[]).unwrap();
-        let mut gpu_data = original.clone();
-        gpu.forward_ntt(&mut gpu_data, &[]).unwrap();
-        assert_eq!(gpu_data, cpu_data, "Forward mismatch at size 2");
-    }
-
-    #[test]
-    fn test_invalid_size_not_power_of_two() {
-        let gpu = match skip_if_no_metal() {
-            Some(g) => g,
-            None => return,
-        };
-        let mut data = vec![M31(1); 3];
-        assert!(gpu.forward_ntt(&mut data, &[]).is_err());
-    }
-
-    #[test]
-    fn test_invalid_size_zero() {
-        let gpu = match skip_if_no_metal() {
-            Some(g) => g,
-            None => return,
-        };
-        let mut data: Vec<M31> = vec![];
-        assert!(gpu.forward_ntt(&mut data, &[]).is_err());
-    }
-
-    // ── Negative-path tests ────────────────────────────────────────────
-
-    #[test]
-    fn test_size_one_identity() {
-        let gpu = match skip_if_no_metal() {
-            Some(g) => g,
-            None => return,
-        };
-        let mut data = vec![M31(42)];
-        gpu.forward_ntt(&mut data, &[]).unwrap();
-        assert_eq!(data[0], M31(42));
-    }
-
-    // ── Round-trip: forward + inverse = identity ─────────────────────────
-
-    #[test]
-    fn test_roundtrip_size4() {
-        let gpu = match skip_if_no_metal() {
-            Some(g) => g,
-            None => return,
-        };
-        let original = vec![M31(1), M31(2), M31(3), M31(4)];
-        let mut data = original.clone();
-        gpu.forward_ntt(&mut data, &[]).unwrap();
-        assert_ne!(data, original, "Forward should change data");
-        gpu.inverse_ntt(&mut data, &[]).unwrap();
-        assert_eq!(data, original, "Round-trip failed at size 4");
-    }
-
-    #[test]
-    fn test_roundtrip_size256() {
-        let gpu = match skip_if_no_metal() {
-            Some(g) => g,
-            None => return,
-        };
-        let original: Vec<M31> = (0..256).map(|i| M31(i * 7 + 3)).collect();
-        let mut data = original.clone();
-        gpu.forward_ntt(&mut data, &[]).unwrap();
-        gpu.inverse_ntt(&mut data, &[]).unwrap();
-        assert_eq!(data, original, "Round-trip failed at size 256");
-    }
-
-    #[test]
-    fn test_roundtrip_size1024() {
-        let gpu = match skip_if_no_metal() {
-            Some(g) => g,
-            None => return,
-        };
-        let original: Vec<M31> = (0..1024).map(|i| M31((i * 13 + 7) % M31::P)).collect();
-        let mut data = original.clone();
-        gpu.forward_ntt(&mut data, &[]).unwrap();
-        gpu.inverse_ntt(&mut data, &[]).unwrap();
-        assert_eq!(data, original, "Round-trip failed at size 1024");
-    }
-
-    #[test]
-    fn test_roundtrip_size8192() {
-        let gpu = match skip_if_no_metal() {
-            Some(g) => g,
-            None => return,
-        };
-        let original: Vec<M31> = lcg_data(8192, 33333);
-        let mut data = original.clone();
-        gpu.forward_ntt(&mut data, &[]).unwrap();
-        gpu.inverse_ntt(&mut data, &[]).unwrap();
-        assert_eq!(data, original, "Round-trip failed at size 8192");
-    }
-
-    #[test]
-    fn test_roundtrip_size16384() {
-        let gpu = match skip_if_no_metal() {
-            Some(g) => g,
-            None => return,
-        };
-        let original: Vec<M31> = lcg_data(16384, 44444);
-        let mut data = original.clone();
-        gpu.forward_ntt(&mut data, &[]).unwrap();
-        gpu.inverse_ntt(&mut data, &[]).unwrap();
-        assert_eq!(data, original, "Round-trip failed at size 16384");
-    }
-
-    #[test]
-    fn test_roundtrip_size2() {
-        let gpu = match skip_if_no_metal() {
-            Some(g) => g,
-            None => return,
-        };
-        let original = vec![M31(100), M31(200)];
-        let mut data = original.clone();
-        gpu.forward_ntt(&mut data, &[]).unwrap();
-        gpu.inverse_ntt(&mut data, &[]).unwrap();
-        assert_eq!(data, original, "Round-trip failed at size 2");
-    }
-
-    #[test]
-    fn test_roundtrip_size4096() {
-        // Exactly one TG tile (MAX_TILE_LOG=12) — no device phase
-        let gpu = match skip_if_no_metal() {
-            Some(g) => g,
-            None => return,
-        };
-        let original: Vec<M31> = lcg_data(4096, 55555);
-        let mut data = original.clone();
-        gpu.forward_ntt(&mut data, &[]).unwrap();
-        gpu.inverse_ntt(&mut data, &[]).unwrap();
-        assert_eq!(data, original, "Round-trip failed at size 4096");
+    fn test_edge_cases() {
+        let gpu = match init() { Some(g) => g, None => return };
+        assert_edge_cases(&gpu);
+        assert_inverse_edge_cases(&gpu);
     }
 
     #[test]
     fn test_pointwise_mul() {
-        let gpu = match skip_if_no_metal() {
-            Some(g) => g,
-            None => return,
-        };
-        let a = vec![M31(2), M31(3), M31(4), M31(5)];
-        let b = vec![M31(10), M31(20), M31(30), M31(40)];
-        let mut out = vec![M31(0); 4];
-        gpu.pointwise_mul(&a, &b, &mut out).unwrap();
-        assert_eq!(out, vec![M31(20), M31(60), M31(120), M31(200)]);
+        let gpu = match init() { Some(g) => g, None => return };
+        assert_pointwise_mul(&gpu);
     }
 
     #[test]
-    fn test_pointwise_mul_size_mismatch() {
-        let gpu = match skip_if_no_metal() {
-            Some(g) => g,
-            None => return,
-        };
-        let a = vec![M31(1); 4];
-        let b = vec![M31(1); 3];
-        let mut out = vec![M31(0); 4];
-        assert!(gpu.pointwise_mul(&a, &b, &mut out).is_err());
+    fn test_size2_forward_and_roundtrip() {
+        let gpu = match init() { Some(g) => g, None => return };
+        assert_forward_matches_cpu(&gpu, &[2]);
+        assert_roundtrip(&gpu, &[2]);
     }
 
-    // ── Helpers ──────────────────────────────────────────────────────────
+    // ── V3-specific: TG tile boundary at MAX_TILE_LOG=12 ────────────────
 
-    fn lcg_data(n: usize, seed: u64) -> Vec<M31> {
-        let mut s = seed;
-        (0..n)
-            .map(|_| {
-                s = s.wrapping_mul(6364136223846793005).wrapping_add(1);
-                M31(((s >> 33) as u32) % M31::P)
-            })
-            .collect()
+    #[test]
+    fn test_roundtrip_size4096_tg_boundary() {
+        // Exactly one TG tile (MAX_TILE_LOG=12) — no device phase
+        let gpu = match init() { Some(g) => g, None => return };
+        assert_roundtrip(&gpu, &[4096]);
     }
 }
