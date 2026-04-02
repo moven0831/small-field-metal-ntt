@@ -16,6 +16,7 @@ use crate::field::m31::M31;
 use crate::field::Field;
 use crate::gpu::MetalContext;
 use crate::ntt::{NttBackend, NttError};
+use crate::ntt::twiddles::generate_twiddles;
 use metal::*;
 use std::path::Path;
 
@@ -124,40 +125,7 @@ impl NttBackend<M31> for MetalCtDitR2 {
     }
 }
 
-/// Generate twiddle factors matching the CPU reference exactly.
-/// Layer i has n/(2^(i+1)) twiddles, using x-coordinates of coset points
-/// (y-coordinates for the last layer to avoid x=0).
-fn generate_twiddles(coset: &Coset) -> Vec<Vec<M31>> {
-    let log_n = coset.log_size as usize;
-    let mut result = Vec::with_capacity(log_n);
-    let mut current = coset.clone();
-
-    for layer_idx in 0..log_n {
-        let half_size = current.size() / 2;
-        let is_last = layer_idx == log_n - 1;
-
-        let layer_tw: Vec<M31> = (0..half_size)
-            .map(|i| {
-                let p = current.at(bit_reverse_idx(i, current.log_size - 1));
-                if is_last { p.y } else { p.x }
-            })
-            .collect();
-        result.push(layer_tw);
-        current = current.double();
-    }
-
-    result
-}
-
-fn bit_reverse_idx(index: usize, log_size: u32) -> usize {
-    let mut val = index as u32;
-    let mut result = 0u32;
-    for _ in 0..log_size {
-        result = (result << 1) | (val & 1);
-        val >>= 1;
-    }
-    result as usize
-}
+// Twiddle generation and bit-reversal utilities are in crate::ntt::twiddles.
 
 #[cfg(test)]
 mod tests {

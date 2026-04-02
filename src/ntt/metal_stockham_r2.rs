@@ -18,6 +18,7 @@
 //! two arrays). Handles 12 stages on-chip vs Variant 2's 13.
 
 use crate::field::circle::Coset;
+use crate::ntt::twiddles::{generate_twiddles, generate_itwiddles};
 use crate::field::m31::M31;
 use crate::field::Field;
 use crate::gpu::MetalContext;
@@ -383,62 +384,7 @@ impl NttBackend<M31> for MetalStockhamR2 {
     }
 }
 
-// ─── Twiddle generation (same as Variants 1 & 2) ────────────────────────
-
-fn generate_twiddles(coset: &Coset) -> Vec<Vec<M31>> {
-    let log_n = coset.log_size as usize;
-    let mut result = Vec::with_capacity(log_n);
-    let mut current = coset.clone();
-
-    for layer_idx in 0..log_n {
-        let half_size = current.size() / 2;
-        let is_last = layer_idx == log_n - 1;
-        let layer_tw: Vec<M31> = (0..half_size)
-            .map(|i| {
-                let p = current.at(bit_reverse_idx(i, current.log_size - 1));
-                if is_last {
-                    p.y
-                } else {
-                    p.x
-                }
-            })
-            .collect();
-        result.push(layer_tw);
-        current = current.double();
-    }
-    result
-}
-
-fn generate_itwiddles(coset: &Coset) -> Vec<Vec<M31>> {
-    let log_n = coset.log_size as usize;
-    let mut result = Vec::with_capacity(log_n);
-    let mut current = coset.clone();
-
-    for layer_idx in 0..log_n {
-        let half_size = current.size() / 2;
-        let is_last = layer_idx == log_n - 1;
-        let layer_tw: Vec<M31> = (0..half_size)
-            .map(|i| {
-                let p = current.at(bit_reverse_idx(i, current.log_size - 1));
-                let t = if is_last { p.y } else { p.x };
-                t.inv()
-            })
-            .collect();
-        result.push(layer_tw);
-        current = current.double();
-    }
-    result
-}
-
-fn bit_reverse_idx(index: usize, log_size: u32) -> usize {
-    let mut val = index as u32;
-    let mut result = 0u32;
-    for _ in 0..log_size {
-        result = (result << 1) | (val & 1);
-        val >>= 1;
-    }
-    result as usize
-}
+// Twiddle generation and bit-reversal utilities are in crate::ntt::twiddles.
 
 #[cfg(test)]
 mod tests {

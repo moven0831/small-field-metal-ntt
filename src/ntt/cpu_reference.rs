@@ -2,6 +2,7 @@ use crate::field::m31::M31;
 use crate::field::circle::Coset;
 use crate::field::Field;
 use crate::ntt::{NttBackend, NttError};
+use crate::ntt::twiddles::{generate_twiddles, generate_itwiddles};
 
 /// CPU reference implementation of the Circle FFT (CFFT / DCCT) over M31.
 ///
@@ -138,74 +139,7 @@ fn butterfly_inverse(data: &mut [M31], idx0: usize, idx1: usize, twiddle_inv: M3
     data[idx1] = v0.sub(v1).mul(twiddle_inv);
 }
 
-/// Generate forward twiddle factors for each layer.
-///
-/// The Circle FFT has two types of layers:
-/// - Line layers (0..log_n-1): use x-coordinates of coset points
-/// - Circle layer (last, index log_n-1): use y-coordinates
-///
-/// The coset doubles after each layer. At the deepest layer, the doubled
-/// coset has x=0 (since 2*(2^15)^2 - 1 = 0 mod p for M31), so we must
-/// use y-coordinates instead.
-fn generate_twiddles(coset: &Coset) -> Vec<Vec<M31>> {
-    let mut result = Vec::new();
-    let mut current = coset.clone();
-    let log_n = coset.log_size;
-
-    for layer in 0..log_n {
-        let half_size = current.size() / 2;
-        let is_last_layer = layer == log_n - 1;
-
-        let layer_twiddles: Vec<M31> = (0..half_size)
-            .map(|i| {
-                let p = current.at(bit_reverse(i, current.log_size - 1));
-                if is_last_layer { p.y } else { p.x }
-            })
-            .collect();
-        result.push(layer_twiddles);
-        current = current.double();
-    }
-
-    result
-}
-
-/// Generate inverse twiddle factors.
-/// Same structure as forward but with inverted twiddle values.
-fn generate_itwiddles(coset: &Coset) -> Vec<Vec<M31>> {
-    let mut result = Vec::new();
-    let mut current = coset.clone();
-    let log_n = coset.log_size;
-
-    for layer in 0..log_n {
-        let half_size = current.size() / 2;
-        let is_last_layer = layer == log_n - 1;
-
-        let layer_twiddles: Vec<M31> = (0..half_size)
-            .map(|i| {
-                let p = current.at(bit_reverse(i, current.log_size - 1));
-                let t = if is_last_layer { p.y } else { p.x };
-                t.inv()
-            })
-            .collect();
-        result.push(layer_twiddles);
-        current = current.double();
-    }
-
-    result
-}
-
-fn bit_reverse(index: usize, log_size: u32) -> usize {
-    reverse_bits(index as u32, log_size) as usize
-}
-
-fn reverse_bits(mut val: u32, width: u32) -> u32 {
-    let mut result = 0u32;
-    for _ in 0..width {
-        result = (result << 1) | (val & 1);
-        val >>= 1;
-    }
-    result
-}
+// Twiddle generation and bit-reversal utilities are in crate::ntt::twiddles.
 
 #[cfg(test)]
 mod tests {
