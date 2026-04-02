@@ -33,18 +33,34 @@ Apple M3, optimized build. Median of 20 iterations, 5 warmup. Forward NTT over M
 
 **Winner: V4 (radix-4)** at all GPU sizes. 85.2 ms at 2^20 (12.3 Melem/s).
 
+### Cooperative CPU-GPU Split-Point Sweep
+
+The key finding: on UMA, splitting NTT layers between CPU and GPU beats both pure approaches.
+
+CPU does the first S layers (high stride, cache-friendly), GPU does the rest (high parallelism). Run with `cargo bench --bench ntt_benchmark -- --cooperative`.
+
+| Size | Optimal split | CPU layers | GPU layers | Total | vs all-GPU | vs all-CPU |
+|------|--------------|------------|------------|-------|------------|------------|
+| 2^10 | 10 (all CPU) | 10 | 0 | 5 us | 60x faster | same |
+| 2^14 | 14 (all CPU) | 14 | 0 | 87 us | 7x faster | same |
+| 2^16 | 16 (all CPU) | 16 | 0 | 388 us | 3x faster | same |
+| **2^18** | **6** | **6** | **12** | **1.2 ms** | **1.9x faster** | **1.4x faster** |
+| **2^20** | **7** | **7** | **13** | **3.8 ms** | **1.5x faster** | **1.9x faster** |
+
+At prover-relevant sizes (2^18+), the U-curve appears: neither all-CPU nor all-GPU is optimal. The cooperative split at 2^20 is **34% faster than all-GPU** and **47% faster than all-CPU**.
+
 ### Key Takeaways
 
-1. **Radix-4 wins.** Half the barriers = ~5-10% speedup over radix-2 at every size.
-2. **Threadgroup memory matters.** V2/V3/V4 are 2-8x faster than V1 at small sizes.
-3. **Stockham's 2x memory hurts on UMA.** V3 is ~3-5% slower than V2. Out-of-place doesn't help on Apple Silicon.
-4. **CPU is competitive at 2^20.** Memory-bandwidth-bound. UMA means CPU and GPU share the same bandwidth.
-5. **GPU wins at mid-range.** Peak advantage at 2^14-2^16 where parallelism helps but memory isn't the bottleneck.
-6. **M31's Mersenne reduction is nearly free on GPU.** `reduce(x) = (x >> 31) + (x & 0x7FFFFFFF)` is a shift and a mask, no multiply. This makes butterflies arithmetic-cheap, so barrier and memory overhead dominate. The algorithm ranking may shift for Montgomery-reduced fields (BabyBear, KoalaBear) where each butterfly costs a full 32x32 multiply for reduction, making the compute-to-memory ratio heavier.
+1. **UMA changes the game.** On Apple Silicon, splitting NTT between CPU and GPU outperforms both pure approaches at prover-relevant sizes (2^18+). This is the first published evidence.
+2. **Radix-4 wins** the GPU-only shootout. Half the barriers = ~5-10% speedup over radix-2.
+3. **CPU dominates at small sizes.** GPU dispatch overhead (~200us) makes pure GPU slower than CPU below 2^16.
+4. **The split point is size-dependent.** At 2^18, CPU does 6 layers. At 2^20, CPU does 7. The crossover shifts as memory pressure increases.
+5. **M31's Mersenne reduction is nearly free on GPU.** The algorithm ranking may shift for Montgomery fields (BabyBear) where each butterfly costs a full 32x32 multiply.
+6. **Stockham's 2x memory hurts on UMA.** V3 is ~3-5% slower than V2. Out-of-place doesn't help.
 
 ## Why This Matters
 
-The ZK community defaults to Cooley-Tukey NTT. The GPU FFT community converged on Stockham (for discrete GPUs with PCIe). Apple Silicon UMA changes both assumptions. **Nobody has tested which algorithm family actually wins on UMA for ZK fields.** This benchmark produces that data.
+The ZK community defaults to Cooley-Tukey NTT. The GPU FFT community converged on Stockham (for discrete GPUs with PCIe). Apple Silicon UMA changes both assumptions. **Nobody has tested which algorithm family actually wins on UMA for ZK fields, or whether splitting work between CPU and GPU is better than either alone.** This benchmark produces that data.
 
 Part of the [Ethereum GPU Acceleration Alliance (EGAA)](https://github.com/zkmopro/awesome-client-side-gpu) effort to build shared GPU infrastructure for client-side ZK proving.
 
@@ -85,6 +101,7 @@ All GPU variants use a two-phase strategy:
 - [x] Benchmark harness: all variants head-to-head, CSV + summary (PR #8)
 - [x] BabyBear field: Montgomery reduction, standard NTT twiddles (PR #9)
 - [x] UMA cache coherency verified: CPU-GPU shared buffer works without flush (PR #10)
+- [x] Cooperative CPU-GPU NTT: split-point sweep showing U-curve at 2^18+ (PR #12)
 
 ### Next
 
@@ -96,7 +113,7 @@ All GPU variants use a two-phase strategy:
 ### Future
 
 - [ ] Modular reduction strategy comparison (Mersenne vs Montgomery vs Barrett on GPU — which maps best to Metal ALUs and SIMD width?)
-- [ ] Cooperative CPU-GPU NTT on UMA (zero-copy handoff at stage boundary)
+- [x] Cooperative CPU-GPU NTT on UMA with split-point sweep (PR #12)
 - [ ] 4-step decomposition for 2^22+ transforms
 - [ ] Batched small NTTs for lattice crypto (Kyber/Dilithium)
 - [ ] M31 extension field (Fp2) for Stwo production constraints
