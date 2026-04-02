@@ -1,8 +1,7 @@
 use crate::field::m31::M31;
-use crate::field::circle::Coset;
 use crate::field::Field;
 use crate::ntt::{NttBackend, NttError};
-use crate::ntt::twiddles::{generate_twiddles, generate_itwiddles};
+use crate::ntt::twiddles::TwiddleCache;
 
 /// CPU reference implementation of the Circle FFT (CFFT / DCCT) over M31.
 ///
@@ -24,7 +23,17 @@ use crate::ntt::twiddles::{generate_twiddles, generate_itwiddles};
 /// The coset doubles after each layer (x,y) -> (2x^2-1, 2xy).
 ///
 /// Not optimized for performance. Clarity is the priority.
-pub struct CpuReferenceBackend;
+pub struct CpuReferenceBackend {
+    twiddle_cache: TwiddleCache,
+}
+
+impl CpuReferenceBackend {
+    pub fn new() -> Self {
+        Self {
+            twiddle_cache: TwiddleCache::new(),
+        }
+    }
+}
 
 impl NttBackend<M31> for CpuReferenceBackend {
     fn name(&self) -> &str {
@@ -41,9 +50,7 @@ impl NttBackend<M31> for CpuReferenceBackend {
         }
         let log_n = n.trailing_zeros() as usize;
 
-        // Generate twiddles from the canonic coset
-        let coset = Coset::odds(log_n as u32);
-        let twiddles = generate_twiddles(&coset);
+        let twiddles = self.twiddle_cache.forward(log_n as u32);
 
         // Forward FFT: process layers from last to first
         for layer in (0..log_n).rev() {
@@ -74,9 +81,7 @@ impl NttBackend<M31> for CpuReferenceBackend {
         }
         let log_n = n.trailing_zeros() as usize;
 
-        // Generate inverse twiddles from the canonic coset
-        let coset = Coset::odds(log_n as u32);
-        let itwiddles = generate_itwiddles(&coset);
+        let itwiddles = self.twiddle_cache.inverse(log_n as u32);
 
         // Inverse FFT: process layers from first to last
         for layer in 0..log_n {
@@ -148,7 +153,7 @@ mod tests {
 
     #[test]
     fn test_forward_inverse_roundtrip_small() {
-        let backend = CpuReferenceBackend;
+        let backend = CpuReferenceBackend::new();
         let original: Vec<M31> = (0..4).map(|i| M31(i + 1)).collect();
         let mut data = original.clone();
 
@@ -163,7 +168,7 @@ mod tests {
 
     #[test]
     fn test_forward_inverse_roundtrip_medium() {
-        let backend = CpuReferenceBackend;
+        let backend = CpuReferenceBackend::new();
         // Use 2^8 = 256 elements
         let original: Vec<M31> = (0..256).map(|i| M31(i * 7 + 3)).collect();
         let mut data = original.clone();
@@ -177,7 +182,7 @@ mod tests {
 
     #[test]
     fn test_forward_inverse_roundtrip_1024() {
-        let backend = CpuReferenceBackend;
+        let backend = CpuReferenceBackend::new();
         let original: Vec<M31> = (0..1024).map(|i| M31((i * 13 + 7) % M31::P)).collect();
         let mut data = original.clone();
 
@@ -188,7 +193,7 @@ mod tests {
 
     #[test]
     fn test_all_zeros() {
-        let backend = CpuReferenceBackend;
+        let backend = CpuReferenceBackend::new();
         let mut data = vec![M31(0); 16];
         backend.forward_ntt(&mut data, &[]).unwrap();
         assert!(data.iter().all(|&x| x == M31(0)), "NTT of zeros should be zeros");
@@ -196,7 +201,7 @@ mod tests {
 
     #[test]
     fn test_size_one() {
-        let backend = CpuReferenceBackend;
+        let backend = CpuReferenceBackend::new();
         let mut data = vec![M31(42)];
         backend.forward_ntt(&mut data, &[]).unwrap();
         assert_eq!(data[0], M31(42));
@@ -204,21 +209,21 @@ mod tests {
 
     #[test]
     fn test_invalid_size() {
-        let backend = CpuReferenceBackend;
+        let backend = CpuReferenceBackend::new();
         let mut data = vec![M31(1); 3]; // Not power of 2
         assert!(backend.forward_ntt(&mut data, &[]).is_err());
     }
 
     #[test]
     fn test_invalid_size_zero() {
-        let backend = CpuReferenceBackend;
+        let backend = CpuReferenceBackend::new();
         let mut data: Vec<M31> = vec![];
         assert!(backend.forward_ntt(&mut data, &[]).is_err());
     }
 
     #[test]
     fn test_pointwise_mul() {
-        let backend = CpuReferenceBackend;
+        let backend = CpuReferenceBackend::new();
         let a = vec![M31(2), M31(3), M31(4), M31(5)];
         let b = vec![M31(10), M31(20), M31(30), M31(40)];
         let mut out = vec![M31(0); 4];
@@ -229,7 +234,7 @@ mod tests {
     #[test]
     fn test_linearity() {
         // NTT should be linear: NTT(a + b) = NTT(a) + NTT(b)
-        let backend = CpuReferenceBackend;
+        let backend = CpuReferenceBackend::new();
         let n = 16;
         let a: Vec<M31> = (0..n).map(|i| M31(i as u32 + 1)).collect();
         let b: Vec<M31> = (0..n).map(|i| M31(i as u32 * 3 + 2)).collect();
@@ -252,7 +257,7 @@ mod tests {
 
     #[test]
     fn test_roundtrip_random_large() {
-        let backend = CpuReferenceBackend;
+        let backend = CpuReferenceBackend::new();
         // Pseudo-random data using a simple LCG
         let n = 4096;
         let mut seed: u64 = 12345;

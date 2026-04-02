@@ -59,7 +59,7 @@ fn test_data(n: usize) -> Vec<M31> {
 
 /// Assert that the backend's forward NTT matches the CPU reference at the given sizes.
 pub fn assert_forward_matches_cpu(backend: &impl NttBackend<M31>, sizes: &[usize]) {
-    let cpu = CpuReferenceBackend;
+    let cpu = CpuReferenceBackend::new();
     for &n in sizes {
         let original = test_data(n);
         let mut cpu_data = original.clone();

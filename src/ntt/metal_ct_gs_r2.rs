@@ -15,10 +15,9 @@
 //! Total dispatches for 2^20 NTT: 1 (threadgroup, 13 stages) + 7 (device) = 8
 //! vs Variant 1's 20 dispatches (all device memory).
 
-use crate::field::circle::Coset;
 use crate::field::m31::M31;
 use crate::field::Field;
-use crate::ntt::twiddles::{generate_twiddles, generate_itwiddles};
+use crate::ntt::twiddles::TwiddleCache;
 use crate::gpu::MetalContext;
 use crate::ntt::{NttBackend, NttError};
 use metal::*;
@@ -35,6 +34,7 @@ pub struct MetalCtGsR2 {
     forward_device_pipeline: ComputePipelineState,
     inverse_device_pipeline: ComputePipelineState,
     normalize_pipeline: ComputePipelineState,
+    twiddle_cache: TwiddleCache,
 }
 
 impl MetalCtGsR2 {
@@ -53,6 +53,7 @@ impl MetalCtGsR2 {
             forward_device_pipeline: forward_dev,
             inverse_device_pipeline: inverse_dev,
             normalize_pipeline: normalize,
+            twiddle_cache: TwiddleCache::new(),
         })
     }
 
@@ -74,8 +75,7 @@ impl MetalCtGsR2 {
             return Ok((input.to_vec(), 0));
         }
 
-        let coset = Coset::odds(log_n as u32);
-        let twiddles = generate_twiddles(&coset);
+        let twiddles = self.twiddle_cache.forward(log_n as u32);
 
         let buf_data = self.ctx.buffer_from_slice(input)?;
         let mut total_ns: u64 = 0;
@@ -130,8 +130,7 @@ impl MetalCtGsR2 {
             return Ok((input.to_vec(), 0));
         }
 
-        let coset = Coset::odds(log_n as u32);
-        let itwiddles = generate_itwiddles(&coset);
+        let itwiddles = self.twiddle_cache.inverse(log_n as u32);
 
         let buf_data = self.ctx.buffer_from_slice(input)?;
         let mut total_ns: u64 = 0;

@@ -17,8 +17,7 @@
 //! Threadgroup tile: 4096 elements (half of Variant 2's 8192, due to needing
 //! two arrays). Handles 12 stages on-chip vs Variant 2's 13.
 
-use crate::field::circle::Coset;
-use crate::ntt::twiddles::{generate_twiddles, generate_itwiddles};
+use crate::ntt::twiddles::TwiddleCache;
 use crate::field::m31::M31;
 use crate::field::Field;
 use crate::gpu::MetalContext;
@@ -36,6 +35,7 @@ pub struct MetalStockhamR2 {
     inverse_tg_pipeline: ComputePipelineState,
     inverse_device_pipeline: ComputePipelineState,
     normalize_pipeline: ComputePipelineState,
+    twiddle_cache: TwiddleCache,
 }
 
 impl MetalStockhamR2 {
@@ -54,6 +54,7 @@ impl MetalStockhamR2 {
             inverse_tg_pipeline: inverse_tg,
             inverse_device_pipeline: inverse_dev,
             normalize_pipeline: normalize,
+            twiddle_cache: TwiddleCache::new(),
         })
     }
 
@@ -75,8 +76,7 @@ impl MetalStockhamR2 {
             return Ok((input.to_vec(), 0));
         }
 
-        let coset = Coset::odds(log_n as u32);
-        let twiddles = generate_twiddles(&coset);
+        let twiddles = self.twiddle_cache.forward(log_n as u32);
 
         // Allocate two device buffers for ping-pong
         let buf_a = self.ctx.buffer_from_slice(input)?;
@@ -201,8 +201,7 @@ impl MetalStockhamR2 {
             return Ok((input.to_vec(), 0));
         }
 
-        let coset = Coset::odds(log_n as u32);
-        let itwiddles = generate_itwiddles(&coset);
+        let itwiddles = self.twiddle_cache.inverse(log_n as u32);
 
         // Allocate two device buffers for ping-pong
         let buf_a = self.ctx.buffer_from_slice(input)?;

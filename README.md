@@ -21,17 +21,17 @@ The first open-source Metal NTT implementation for zero-knowledge proof fields, 
 
 ## Benchmark Results
 
-Apple M3, optimized build. Median of 20 iterations, 5 warmup. Forward NTT over M31 (Circle NTT).
+Apple M3, optimized build. Median of 20 iterations, 5 warmup. Forward NTT over M31 (Circle NTT). Twiddle factors cached (amortized across iterations).
 
 | Variant | 2^10 | 2^12 | 2^14 | 2^16 | 2^18 | 2^20 |
 |---------|------|------|------|------|------|------|
-| CPU ref | 35 us | 176 us | 879 us | 4.1 ms | 19.1 ms | 86.2 ms |
-| V1 CT-DIT r2 | 1916 us | 2354 us | 3743 us | 7.1 ms | 24.1 ms | 91.6 ms |
-| V2 CT-GS r2 | 240 us | 400 us | 1525 us | 5.3 ms | 20.1 ms | 87.8 ms |
-| V3 Stockham | 255 us | 415 us | 1676 us | 5.8 ms | 20.8 ms | 87.2 ms |
-| **V4 CT-GS r4** | **234 us** | **383 us** | **1420 us** | **5.4 ms** | **19.7 ms** | **85.2 ms** |
+| CPU ref | 6 us | 19 us | 74 us | 324 us | 1.5 ms | 6.5 ms |
+| V1 CT-DIT r2 | 1789 us | 1960 us | 2301 us | 1965 us | 3528 us | 7.4 ms |
+| V2 CT-GS r2 | 199 us | 231 us | 362 us | 628 us | 1.5 ms | 4.5 ms |
+| V3 Stockham | 203 us | 242 us | 477 us | 806 us | 1.9 ms | 4.8 ms |
+| **V4 CT-GS r4** | **196 us** | **217 us** | **351 us** | **497 us** | **1.5 ms** | **3.3 ms** |
 
-**Winner: V4 (radix-4)** at all GPU sizes. 85.2 ms at 2^20 (12.3 Melem/s).
+**Winner: V4 (radix-4)** at all GPU sizes. 3.3 ms at 2^20 (318 Melem/s). GPU is **2.0x faster** than CPU at 2^20.
 
 ### Cooperative CPU-GPU Split-Point Sweep
 
@@ -52,11 +52,13 @@ At prover-relevant sizes (2^18+), the U-curve appears: neither all-CPU nor all-G
 ### Key Takeaways
 
 1. **UMA changes the game.** On Apple Silicon, splitting NTT between CPU and GPU outperforms both pure approaches at prover-relevant sizes (2^18+). This is the first published evidence.
-2. **Radix-4 wins** the GPU-only shootout. Half the barriers = ~5-10% speedup over radix-2.
-3. **CPU dominates at small sizes.** GPU dispatch overhead (~200us) makes pure GPU slower than CPU below 2^16.
-4. **The split point is size-dependent.** At 2^18, CPU does 6 layers. At 2^20, CPU does 7. The crossover shifts as memory pressure increases.
-5. **M31's Mersenne reduction is nearly free on GPU.** The algorithm ranking may shift for Montgomery fields (BabyBear) where each butterfly costs a full 32x32 multiply.
-6. **Stockham's 2x memory hurts on UMA.** V3 is ~3-5% slower than V2. Out-of-place doesn't help.
+2. **GPU wins at 2^18+.** V4 (radix-4) is 2.0x faster than CPU at 2^20. The crossover is around 2^18 where GPU dispatch overhead is amortized.
+3. **Radix-4 wins** the GPU-only shootout. Half the barriers = ~27% speedup over radix-2 at 2^20.
+4. **CPU dominates at small sizes.** GPU dispatch overhead (~200us) makes pure GPU slower than CPU below 2^16.
+5. **The split point is size-dependent.** At 2^18, CPU does 6 layers. At 2^20, CPU does 7. The crossover shifts as memory pressure increases.
+6. **M31's Mersenne reduction is nearly free on GPU.** The algorithm ranking may shift for Montgomery fields (BabyBear) where each butterfly costs a full 32x32 multiply.
+7. **Stockham's 2x memory hurts on UMA.** V3 is ~7% slower than V2 at 2^20. Out-of-place doesn't help.
+8. **Twiddle generation dominates naive benchmarks.** Without caching, twiddle gen (79ms at 2^20) dwarfs both CPU butterfly (6.5ms) and GPU dispatch (3.3ms) time. Previous results were artifacts of twiddle overhead.
 
 ## Why This Matters
 
