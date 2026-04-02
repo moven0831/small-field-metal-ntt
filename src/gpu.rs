@@ -171,7 +171,129 @@ impl MetalContext {
         Ok(duration_ns)
     }
 
-    // ── Dispatch helpers ────────────────────────────────────────────────
+    // ── Batch dispatch API ───────────────────────────────────────────────
+    // Encode multiple dispatches into a single command buffer, submit once.
+    // Metal inserts implicit memory barriers between compute encoders on
+    // the same command buffer, so sequential NTT layers are safe.
+
+    /// Create a new command buffer for batching multiple dispatches.
+    pub fn begin_batch(&self) -> &CommandBufferRef {
+        self.command_queue.new_command_buffer()
+    }
+
+    /// Encode a single compute dispatch into an existing command buffer.
+    /// Does NOT commit — call `submit_batch` when all dispatches are encoded.
+    pub fn encode_dispatch(
+        cmd_buffer: &CommandBufferRef,
+        pipeline: &ComputePipelineState,
+        buffers: &[&Buffer],
+        threadgroups: MTLSize,
+        threads_per_group: MTLSize,
+    ) {
+        let encoder = cmd_buffer.new_compute_command_encoder();
+        encoder.set_compute_pipeline_state(pipeline);
+        for (i, buf) in buffers.iter().enumerate() {
+            encoder.set_buffer(i as u64, Some(buf), 0);
+        }
+        encoder.dispatch_thread_groups(threadgroups, threads_per_group);
+        encoder.end_encoding();
+    }
+
+    /// Commit a batched command buffer and wait for GPU completion.
+    /// Returns wall-clock time in nanoseconds.
+    pub fn submit_batch(cmd_buffer: &CommandBufferRef) -> Result<u64, NttError> {
+        let start = std::time::Instant::now();
+        cmd_buffer.commit();
+        cmd_buffer.wait_until_completed();
+        let duration_ns = start.elapsed().as_nanos() as u64;
+
+        let status = cmd_buffer.status();
+        if status == MTLCommandBufferStatus::Error {
+            return Err(NttError::GpuExecutionError(
+                "Batch command buffer completed with error status".to_string(),
+            ));
+        }
+
+        Ok(duration_ns)
+    }
+
+    /// Encode a radix-2 butterfly dispatch into a batch command buffer.
+    pub fn encode_butterfly_r2(
+        &self,
+        cmd_buffer: &CommandBufferRef,
+        pipeline: &ComputePipelineState,
+        buf_data: &Buffer,
+        twiddles: &[M31],
+        stride: usize,
+        n: usize,
+    ) -> Result<(), NttError> {
+        let tw_data: Vec<u32> = twiddles.iter().map(|m| m.0).collect();
+        let buf_tw = self.buffer_from_slice(&tw_data)?;
+        let params: Vec<u32> = vec![stride as u32, n as u32];
+        let buf_p = self.buffer_from_slice(&params)?;
+
+        let num_butterflies = (n / 2) as u64;
+        let max_tpg = Self::max_threads_per_threadgroup(pipeline) as u64;
+        let (tg, tpg) = Self::compute_grid_1d(num_butterflies, max_tpg.min(256));
+
+        Self::encode_dispatch(cmd_buffer, pipeline, &[buf_data, &buf_tw, &buf_p], tg, tpg);
+        Ok(())
+    }
+
+    /// Encode a radix-4 butterfly dispatch into a batch command buffer.
+    #[allow(clippy::too_many_arguments)]
+    pub fn encode_butterfly_r4(
+        &self,
+        cmd_buffer: &CommandBufferRef,
+        pipeline: &ComputePipelineState,
+        buf_data: &Buffer,
+        tw_outer: &[M31],
+        tw_inner: &[M31],
+        outer_stride: usize,
+        inner_stride: usize,
+        n: usize,
+    ) -> Result<(), NttError> {
+        let tw_o: Vec<u32> = tw_outer.iter().map(|m| m.0).collect();
+        let tw_i: Vec<u32> = tw_inner.iter().map(|m| m.0).collect();
+        let buf_tw_o = self.buffer_from_slice(&tw_o)?;
+        let buf_tw_i = self.buffer_from_slice(&tw_i)?;
+        let params: Vec<u32> = vec![outer_stride as u32, inner_stride as u32, n as u32];
+        let buf_p = self.buffer_from_slice(&params)?;
+
+        let num_butterflies = (n / 4) as u64;
+        let max_tpg = Self::max_threads_per_threadgroup(pipeline) as u64;
+        let (tg, tpg) = Self::compute_grid_1d(num_butterflies, max_tpg.min(256));
+
+        Self::encode_dispatch(
+            cmd_buffer,
+            pipeline,
+            &[buf_data, &buf_tw_o, &buf_tw_i, &buf_p],
+            tg,
+            tpg,
+        );
+        Ok(())
+    }
+
+    /// Encode a normalize dispatch into a batch command buffer.
+    pub fn encode_normalize(
+        &self,
+        cmd_buffer: &CommandBufferRef,
+        pipeline: &ComputePipelineState,
+        buf_data: &Buffer,
+        n: usize,
+        inv_n: M31,
+    ) -> Result<(), NttError> {
+        let params: Vec<u32> = vec![n as u32, inv_n.0];
+        let buf_p = self.buffer_from_slice(&params)?;
+
+        let max_tpg = Self::max_threads_per_threadgroup(pipeline) as u64;
+        let (tg, tpg) = Self::compute_grid_1d(n as u64, max_tpg.min(256));
+
+        Self::encode_dispatch(cmd_buffer, pipeline, &[buf_data, &buf_p], tg, tpg);
+        Ok(())
+    }
+
+    // ── Single-dispatch helpers (kept for tests and simple use cases) ────
 
     /// Compute 1D threadgroup/grid sizes for a given number of work items.
     /// Returns (threadgroups, threads_per_group).

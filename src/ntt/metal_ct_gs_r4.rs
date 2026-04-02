@@ -76,14 +76,15 @@ impl MetalCtGsR4 {
         let twiddles = self.twiddle_cache.forward(log_n as u32);
 
         let buf_data = self.ctx.buffer_from_slice(input)?;
-        let mut total_ns: u64 = 0;
 
         let tile_log = log_n.min(MAX_TILE_LOG);
+        let cmd = self.ctx.begin_batch();
 
         // ── Device-memory phase: layers (log_n-1) down to tile_log ─────
         let num_device_layers = log_n - tile_log;
         if num_device_layers > 0 {
-            total_ns += self.dispatch_device_phase(
+            self.encode_device_phase(
+                cmd,
                 &buf_data,
                 &twiddles,
                 n,
@@ -94,7 +95,8 @@ impl MetalCtGsR4 {
 
         // ── Threadgroup phase: layers (tile_log-1) down to 0 ───────────
         if tile_log > 0 {
-            total_ns += self.dispatch_threadgroup_phase(
+            self.encode_threadgroup_phase(
+                cmd,
                 &buf_data,
                 &twiddles,
                 n,
@@ -102,19 +104,20 @@ impl MetalCtGsR4 {
             )?;
         }
 
+        let total_ns = MetalContext::submit_batch(cmd)?;
         let result = MetalContext::read_buffer(&buf_data, n);
         Ok((result, total_ns))
     }
 
-    fn dispatch_device_phase(
+    fn encode_device_phase(
         &self,
+        cmd: &CommandBufferRef,
         buf_data: &Buffer,
         twiddles: &[Vec<M31>],
         n: usize,
         log_n: usize,
         tile_log: usize,
-    ) -> Result<u64, NttError> {
-        let mut total_ns: u64 = 0;
+    ) -> Result<(), NttError> {
         let num_device_layers = log_n - tile_log;
         let num_r4 = num_device_layers / 2;
         let has_r2 = num_device_layers % 2 == 1;
@@ -126,7 +129,8 @@ impl MetalCtGsR4 {
             let k = current_layer;
             let outer = 1usize << k;
             let inner = 1usize << (k - 1);
-            let ns = self.ctx.dispatch_butterfly_r4(
+            self.ctx.encode_butterfly_r4(
+                cmd,
                 &self.r4_device_pipeline,
                 buf_data,
                 &twiddles[k],
@@ -135,7 +139,6 @@ impl MetalCtGsR4 {
                 inner,
                 n,
             )?;
-            total_ns += ns;
             current_layer -= 2;
         }
 
@@ -143,26 +146,27 @@ impl MetalCtGsR4 {
         if has_r2 {
             let k = current_layer;
             let stride = 1usize << k;
-            let ns = self.ctx.dispatch_butterfly_r2(
+            self.ctx.encode_butterfly_r2(
+                cmd,
                 &self.r2_device_pipeline,
                 buf_data,
                 &twiddles[k],
                 stride,
                 n,
             )?;
-            total_ns += ns;
         }
 
-        Ok(total_ns)
+        Ok(())
     }
 
-    fn dispatch_threadgroup_phase(
+    fn encode_threadgroup_phase(
         &self,
+        cmd: &CommandBufferRef,
         buf_data: &Buffer,
         twiddles: &[Vec<M31>],
         n: usize,
         tile_log: usize,
-    ) -> Result<u64, NttError> {
+    ) -> Result<(), NttError> {
         let num_tg_layers = tile_log;
         let num_r4 = num_tg_layers / 2;
         let has_final_r2 = num_tg_layers % 2 == 1;
@@ -209,12 +213,14 @@ impl MetalCtGsR4 {
         let tg = MTLSize::new(num_tiles as u64, 1, 1);
         let tpg = MTLSize::new(threads, 1, 1);
 
-        self.ctx.dispatch_and_wait(
+        MetalContext::encode_dispatch(
+            cmd,
             &self.forward_tg_pipeline,
             &[buf_data, &buf_tw, &buf_p],
             tg,
             tpg,
-        )
+        );
+        Ok(())
     }
 
     pub fn inverse_ntt_gpu(
@@ -236,13 +242,14 @@ impl MetalCtGsR4 {
         let itwiddles = self.twiddle_cache.inverse(log_n as u32);
 
         let buf_data = self.ctx.buffer_from_slice(input)?;
-        let mut total_ns: u64 = 0;
+        let cmd = self.ctx.begin_batch();
 
         let tile_log = log_n.min(MAX_TILE_LOG);
 
         // ── Threadgroup phase: layers 0 up to (tile_log-1) ────────────
         if tile_log > 0 {
-            total_ns += self.dispatch_threadgroup_inverse(
+            self.encode_threadgroup_inverse(
+                cmd,
                 &buf_data,
                 &itwiddles,
                 n,
@@ -253,7 +260,8 @@ impl MetalCtGsR4 {
         // ── Device-memory phase: layers tile_log up to (log_n-1) ──────
         let num_device_layers = log_n - tile_log;
         if num_device_layers > 0 {
-            total_ns += self.dispatch_device_inverse(
+            self.encode_device_inverse(
+                cmd,
                 &buf_data,
                 &itwiddles,
                 n,
@@ -264,27 +272,28 @@ impl MetalCtGsR4 {
 
         // ── Normalize: multiply all elements by n^{-1} ───────────────
         let inv_n = M31::reduce(n as u64).inv();
-        let ns = self.ctx.dispatch_normalize(
+        self.ctx.encode_normalize(
+            cmd,
             &self.normalize_pipeline,
             &buf_data,
             n,
             inv_n,
         )?;
-        total_ns += ns;
 
+        let total_ns = MetalContext::submit_batch(cmd)?;
         let result = MetalContext::read_buffer(&buf_data, n);
         Ok((result, total_ns))
     }
 
-    fn dispatch_device_inverse(
+    fn encode_device_inverse(
         &self,
+        cmd: &CommandBufferRef,
         buf_data: &Buffer,
         itwiddles: &[Vec<M31>],
         n: usize,
         log_n: usize,
         tile_log: usize,
-    ) -> Result<u64, NttError> {
-        let mut total_ns: u64 = 0;
+    ) -> Result<(), NttError> {
         let num_device_layers = log_n - tile_log;
         let has_r2 = num_device_layers % 2 == 1;
         let num_r4 = num_device_layers / 2;
@@ -296,14 +305,14 @@ impl MetalCtGsR4 {
         if has_r2 {
             let k = current_layer;
             let stride = 1usize << k;
-            let ns = self.ctx.dispatch_butterfly_r2(
+            self.ctx.encode_butterfly_r2(
+                cmd,
                 &self.r2_device_inv_pipeline,
                 buf_data,
                 &itwiddles[k],
                 stride,
                 n,
             )?;
-            total_ns += ns;
             current_layer += 1;
         }
 
@@ -313,7 +322,8 @@ impl MetalCtGsR4 {
             let k_outer = current_layer + 1;
             let outer = 1usize << k_outer;
             let inner = 1usize << k_inner;
-            let ns = self.ctx.dispatch_butterfly_r4(
+            self.ctx.encode_butterfly_r4(
+                cmd,
                 &self.r4_device_inv_pipeline,
                 buf_data,
                 &itwiddles[k_outer],
@@ -322,20 +332,20 @@ impl MetalCtGsR4 {
                 inner,
                 n,
             )?;
-            total_ns += ns;
             current_layer += 2;
         }
 
-        Ok(total_ns)
+        Ok(())
     }
 
-    fn dispatch_threadgroup_inverse(
+    fn encode_threadgroup_inverse(
         &self,
+        cmd: &CommandBufferRef,
         buf_data: &Buffer,
         itwiddles: &[Vec<M31>],
         n: usize,
         tile_log: usize,
-    ) -> Result<u64, NttError> {
+    ) -> Result<(), NttError> {
         let num_tg_layers = tile_log;
         let has_initial_r2 = num_tg_layers % 2 == 1;
         let num_r4 = num_tg_layers / 2;
@@ -385,12 +395,14 @@ impl MetalCtGsR4 {
         let tg = MTLSize::new(num_tiles as u64, 1, 1);
         let tpg = MTLSize::new(threads, 1, 1);
 
-        self.ctx.dispatch_and_wait(
+        MetalContext::encode_dispatch(
+            cmd,
             &self.inverse_tg_pipeline,
             &[buf_data, &buf_tw, &buf_p],
             tg,
             tpg,
-        )
+        );
+        Ok(())
     }
 }
 
