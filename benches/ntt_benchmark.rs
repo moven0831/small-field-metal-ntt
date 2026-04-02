@@ -175,7 +175,7 @@ fn run_algorithm_shootout() {
     }
 
     // Initialize backends
-    let cpu = CpuReferenceBackend;
+    let cpu = CpuReferenceBackend::new();
     let v1 = MetalCtDitR2::new(&dir).expect("Failed to init V1");
     let v2 = MetalCtGsR2::new(&dir).expect("Failed to init V2");
     let v3 = MetalStockhamR2::new(&dir).expect("Failed to init V3");

@@ -253,7 +253,7 @@ mod tests {
             Some(c) => c,
             None => return,
         };
-        let cpu = CpuReferenceBackend;
+        let cpu = CpuReferenceBackend::new();
         let input = lcg_data_u32(1024, 11111);
         let mut cpu_data: Vec<M31> = input.iter().map(|&v| M31(v)).collect();
         cpu.forward_ntt(&mut cpu_data, &[]).unwrap();
@@ -269,7 +269,7 @@ mod tests {
             Some(c) => c,
             None => return,
         };
-        let cpu = CpuReferenceBackend;
+        let cpu = CpuReferenceBackend::new();
         let input = lcg_data_u32(16384, 22222);
         let mut cpu_data: Vec<M31> = input.iter().map(|&v| M31(v)).collect();
         cpu.forward_ntt(&mut cpu_data, &[]).unwrap();
@@ -287,7 +287,7 @@ mod tests {
             Some(c) => c,
             None => return,
         };
-        let cpu = CpuReferenceBackend;
+        let cpu = CpuReferenceBackend::new();
         let input = lcg_data_u32(1024, 33333);
         let mut cpu_data: Vec<M31> = input.iter().map(|&v| M31(v)).collect();
         cpu.forward_ntt(&mut cpu_data, &[]).unwrap();
@@ -303,7 +303,7 @@ mod tests {
             Some(c) => c,
             None => return,
         };
-        let cpu = CpuReferenceBackend;
+        let cpu = CpuReferenceBackend::new();
         let input = lcg_data_u32(16384, 44444);
         let mut cpu_data: Vec<M31> = input.iter().map(|&v| M31(v)).collect();
         cpu.forward_ntt(&mut cpu_data, &[]).unwrap();
@@ -321,7 +321,7 @@ mod tests {
             Some(c) => c,
             None => return,
         };
-        let cpu = CpuReferenceBackend;
+        let cpu = CpuReferenceBackend::new();
         let input = lcg_data_u32(1024, 55555);
         let mut cpu_data: Vec<M31> = input.iter().map(|&v| M31(v)).collect();
         cpu.forward_ntt(&mut cpu_data, &[]).unwrap();
@@ -337,7 +337,7 @@ mod tests {
             Some(c) => c,
             None => return,
         };
-        let cpu = CpuReferenceBackend;
+        let cpu = CpuReferenceBackend::new();
         let input = lcg_data_u32(1024, 66666);
         let mut cpu_data: Vec<M31> = input.iter().map(|&v| M31(v)).collect();
         cpu.forward_ntt(&mut cpu_data, &[]).unwrap();
@@ -354,7 +354,7 @@ mod tests {
             Some(c) => c,
             None => return,
         };
-        let cpu = CpuReferenceBackend;
+        let cpu = CpuReferenceBackend::new();
         let log_n = 8;
         let input = lcg_data_u32(256, 77777);
         let mut cpu_data: Vec<M31> = input.iter().map(|&v| M31(v)).collect();
@@ -378,7 +378,7 @@ mod tests {
             Some(c) => c,
             None => return,
         };
-        let cpu = CpuReferenceBackend;
+        let cpu = CpuReferenceBackend::new();
         let log_n = 12;
         let input = lcg_data_u32(4096, 88888);
         let mut cpu_data: Vec<M31> = input.iter().map(|&v| M31(v)).collect();
@@ -414,7 +414,7 @@ mod tests {
             Some(c) => c,
             None => return,
         };
-        let cpu = CpuReferenceBackend;
+        let cpu = CpuReferenceBackend::new();
         let input = vec![1u32, 2, 3, 4];
         let mut cpu_data: Vec<M31> = input.iter().map(|&v| M31(v)).collect();
         cpu.forward_ntt(&mut cpu_data, &[]).unwrap();
