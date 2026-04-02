@@ -157,33 +157,14 @@ pub fn cooperative_forward_ntt(
         let tile_log = gpu_layers.min(MAX_TILE_LOG);
 
         // Device-memory stages: layers from (gpu_layers-1) down to tile_log
-        let max_tpg =
-            MetalContext::max_threads_per_threadgroup(&coop.device_pipeline) as u64;
-        let tpg_width = max_tpg.min(256);
-
-        for layer_offset in (tile_log..gpu_layers).rev() {
-            // Map layer_offset back to absolute layer index
-            let layer = layer_offset; // layers 0..gpu_layers map to absolute 0..gpu_layers
+        for layer in (tile_log..gpu_layers).rev() {
             let stride = 1usize << layer;
-            let num_butterflies = (n / 2) as u64;
-
-            let tw_data: Vec<u32> = twiddles[layer].iter().map(|m| m.0).collect();
-            let buf_tw = coop.ctx.buffer_from_slice(&tw_data)?;
-            let params: Vec<u32> = vec![stride as u32, n as u32];
-            let buf_p = coop.ctx.buffer_from_slice(&params)?;
-
-            let tg = MTLSize::new(
-                (num_butterflies + tpg_width - 1) / tpg_width,
-                1,
-                1,
-            );
-            let tpg = MTLSize::new(tpg_width.min(num_butterflies), 1, 1);
-
-            coop.ctx.dispatch_and_wait(
+            coop.ctx.dispatch_butterfly_r2(
                 &coop.device_pipeline,
-                &[&buf_data, &buf_tw, &buf_p],
-                tg,
-                tpg,
+                &buf_data,
+                &twiddles[layer],
+                stride,
+                n,
             )?;
         }
 

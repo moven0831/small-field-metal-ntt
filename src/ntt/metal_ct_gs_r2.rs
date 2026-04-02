@@ -84,31 +84,14 @@ impl MetalCtGsR2 {
 
         // ── Phase 1: device-memory stages (large strides) ──────────────
         // Forward: layers from (log_n-1) down to tile_log
-        let max_tpg =
-            MetalContext::max_threads_per_threadgroup(&self.forward_device_pipeline) as u64;
-        let tpg_width = max_tpg.min(256);
-
         for layer in (tile_log..log_n).rev() {
             let stride = 1usize << layer;
-            let num_butterflies = (n / 2) as u64;
-
-            let tw_data: Vec<u32> = twiddles[layer].iter().map(|m| m.0).collect();
-            let buf_tw = self.ctx.buffer_from_slice(&tw_data)?;
-            let params: Vec<u32> = vec![stride as u32, n as u32];
-            let buf_p = self.ctx.buffer_from_slice(&params)?;
-
-            let tg = MTLSize::new(
-                (num_butterflies + tpg_width - 1) / tpg_width,
-                1,
-                1,
-            );
-            let tpg = MTLSize::new(tpg_width.min(num_butterflies), 1, 1);
-
-            let ns = self.ctx.dispatch_and_wait(
+            let ns = self.ctx.dispatch_butterfly_r2(
                 &self.forward_device_pipeline,
-                &[&buf_data, &buf_tw, &buf_p],
-                tg,
-                tpg,
+                &buf_data,
+                &twiddles[layer],
+                stride,
+                n,
             )?;
             total_ns += ns;
         }
@@ -169,55 +152,25 @@ impl MetalCtGsR2 {
 
         // ── Phase 2: device-memory stages (large strides) ──────────────
         // Inverse: layers from tile_log up to (log_n-1)
-        let max_tpg =
-            MetalContext::max_threads_per_threadgroup(&self.inverse_device_pipeline) as u64;
-        let tpg_width = max_tpg.min(256);
-
         for layer in tile_log..log_n {
             let stride = 1usize << layer;
-            let num_butterflies = (n / 2) as u64;
-
-            let tw_data: Vec<u32> = itwiddles[layer].iter().map(|m| m.0).collect();
-            let buf_tw = self.ctx.buffer_from_slice(&tw_data)?;
-            let params: Vec<u32> = vec![stride as u32, n as u32];
-            let buf_p = self.ctx.buffer_from_slice(&params)?;
-
-            let tg = MTLSize::new(
-                (num_butterflies + tpg_width - 1) / tpg_width,
-                1,
-                1,
-            );
-            let tpg = MTLSize::new(tpg_width.min(num_butterflies), 1, 1);
-
-            let ns = self.ctx.dispatch_and_wait(
+            let ns = self.ctx.dispatch_butterfly_r2(
                 &self.inverse_device_pipeline,
-                &[&buf_data, &buf_tw, &buf_p],
-                tg,
-                tpg,
+                &buf_data,
+                &itwiddles[layer],
+                stride,
+                n,
             )?;
             total_ns += ns;
         }
 
         // ── Normalize: multiply all elements by inv_n ──────────────────
         let inv_n = M31::reduce(n as u64).inv();
-        let norm_params: Vec<u32> = vec![n as u32, inv_n.0];
-        let buf_norm_p = self.ctx.buffer_from_slice(&norm_params)?;
-
-        let norm_max_tpg =
-            MetalContext::max_threads_per_threadgroup(&self.normalize_pipeline) as u64;
-        let norm_tpg_width = norm_max_tpg.min(256);
-        let norm_tg = MTLSize::new(
-            (n as u64 + norm_tpg_width - 1) / norm_tpg_width,
-            1,
-            1,
-        );
-        let norm_tpg = MTLSize::new(norm_tpg_width.min(n as u64), 1, 1);
-
-        let ns = self.ctx.dispatch_and_wait(
+        let ns = self.ctx.dispatch_normalize(
             &self.normalize_pipeline,
-            &[&buf_data, &buf_norm_p],
-            norm_tg,
-            norm_tpg,
+            &buf_data,
+            n,
+            inv_n,
         )?;
         total_ns += ns;
 

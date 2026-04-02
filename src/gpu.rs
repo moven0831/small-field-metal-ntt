@@ -17,6 +17,7 @@
 //!           └─> newBufferWithLength() → MTLBuffer
 //! ```
 
+use crate::field::m31::M31;
 use crate::ntt::NttError;
 use metal::*;
 use std::path::Path;
@@ -168,6 +169,97 @@ impl MetalContext {
         }
 
         Ok(duration_ns)
+    }
+
+    // ── Dispatch helpers ────────────────────────────────────────────────
+
+    /// Compute 1D threadgroup/grid sizes for a given number of work items.
+    /// Returns (threadgroups, threads_per_group).
+    ///
+    /// Both `num_items` and `max_tpg` must be > 0.
+    pub(crate) fn compute_grid_1d(num_items: u64, max_tpg: u64) -> (MTLSize, MTLSize) {
+        debug_assert!(num_items > 0, "compute_grid_1d: num_items must be > 0");
+        debug_assert!(max_tpg > 0, "compute_grid_1d: max_tpg must be > 0");
+        let tpg = max_tpg.min(num_items);
+        let groups = num_items.div_ceil(tpg);
+        (MTLSize::new(groups, 1, 1), MTLSize::new(tpg, 1, 1))
+    }
+
+    /// Dispatch a radix-2 butterfly stage on device memory.
+    ///
+    /// Each layer has `n/2` butterflies at stride `2^layer`.
+    /// Buffers bound: [data, twiddles, params].
+    pub fn dispatch_butterfly_r2(
+        &self,
+        pipeline: &ComputePipelineState,
+        buf_data: &Buffer,
+        twiddles: &[M31],
+        stride: usize,
+        n: usize,
+    ) -> Result<u64, NttError> {
+        let tw_data: Vec<u32> = twiddles.iter().map(|m| m.0).collect();
+        let buf_tw = self.buffer_from_slice(&tw_data)?;
+        let params: Vec<u32> = vec![stride as u32, n as u32];
+        let buf_p = self.buffer_from_slice(&params)?;
+
+        let num_butterflies = (n / 2) as u64;
+        let max_tpg = Self::max_threads_per_threadgroup(pipeline) as u64;
+        let (tg, tpg) = Self::compute_grid_1d(num_butterflies, max_tpg.min(256));
+
+        self.dispatch_and_wait(pipeline, &[buf_data, &buf_tw, &buf_p], tg, tpg)
+    }
+
+    /// Dispatch a radix-4 butterfly stage on device memory.
+    ///
+    /// Processes two layers at once (k, k-1). Each radix-4 butterfly
+    /// operates on 4 elements, so there are `n/4` butterflies.
+    /// Buffers bound: [data, twiddles_outer, twiddles_inner, params].
+    #[allow(clippy::too_many_arguments)]
+    pub fn dispatch_butterfly_r4(
+        &self,
+        pipeline: &ComputePipelineState,
+        buf_data: &Buffer,
+        tw_outer: &[M31],
+        tw_inner: &[M31],
+        outer_stride: usize,
+        inner_stride: usize,
+        n: usize,
+    ) -> Result<u64, NttError> {
+        let tw_o: Vec<u32> = tw_outer.iter().map(|m| m.0).collect();
+        let tw_i: Vec<u32> = tw_inner.iter().map(|m| m.0).collect();
+        let buf_tw_o = self.buffer_from_slice(&tw_o)?;
+        let buf_tw_i = self.buffer_from_slice(&tw_i)?;
+        let params: Vec<u32> = vec![outer_stride as u32, inner_stride as u32, n as u32];
+        let buf_p = self.buffer_from_slice(&params)?;
+
+        let num_butterflies = (n / 4) as u64;
+        let max_tpg = Self::max_threads_per_threadgroup(pipeline) as u64;
+        let (tg, tpg) = Self::compute_grid_1d(num_butterflies, max_tpg.min(256));
+
+        self.dispatch_and_wait(
+            pipeline,
+            &[buf_data, &buf_tw_o, &buf_tw_i, &buf_p],
+            tg,
+            tpg,
+        )
+    }
+
+    /// Dispatch the normalization kernel (multiply all elements by inv_n).
+    /// Buffers bound: [data, params].
+    pub fn dispatch_normalize(
+        &self,
+        pipeline: &ComputePipelineState,
+        buf_data: &Buffer,
+        n: usize,
+        inv_n: M31,
+    ) -> Result<u64, NttError> {
+        let params: Vec<u32> = vec![n as u32, inv_n.0];
+        let buf_p = self.buffer_from_slice(&params)?;
+
+        let max_tpg = Self::max_threads_per_threadgroup(pipeline) as u64;
+        let (tg, tpg) = Self::compute_grid_1d(n as u64, max_tpg.min(256));
+
+        self.dispatch_and_wait(pipeline, &[buf_data, &buf_p], tg, tpg)
     }
 }
 
