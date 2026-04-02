@@ -82,6 +82,7 @@ impl MetalStockhamR2 {
         let buf_a = self.ctx.buffer_from_slice(input)?;
         let buf_b = self.ctx.alloc_buffer(n * std::mem::size_of::<u32>())?;
         let cmd = self.ctx.begin_batch();
+        let mut retain = Vec::new();
 
         let tile_log = log_n.min(MAX_TILE_LOG);
 
@@ -124,6 +125,8 @@ impl MetalStockhamR2 {
                 tg,
                 tpg,
             );
+            retain.push(buf_tw);
+            retain.push(buf_p);
             read_from_a = !read_from_a;
         }
 
@@ -174,11 +177,13 @@ impl MetalStockhamR2 {
                 tg,
                 tpg,
             );
+            retain.push(buf_tw);
+            retain.push(buf_p);
             read_from_a = !read_from_a;
         }
 
         // Result is in whichever buffer was last written to
-        let total_ns = MetalContext::submit_batch(cmd)?;
+        let total_ns = MetalContext::submit_batch(cmd, &retain)?;
         let result_buf = if read_from_a { &buf_a } else { &buf_b };
         let result = MetalContext::read_buffer(result_buf, n);
         Ok((result, total_ns))
@@ -208,6 +213,7 @@ impl MetalStockhamR2 {
         let buf_a = self.ctx.buffer_from_slice(input)?;
         let buf_b = self.ctx.alloc_buffer(n * std::mem::size_of::<u32>())?;
         let cmd = self.ctx.begin_batch();
+        let mut retain = Vec::new();
 
         let tile_log = log_n.min(MAX_TILE_LOG);
 
@@ -261,6 +267,8 @@ impl MetalStockhamR2 {
                 tg,
                 tpg,
             );
+            retain.push(buf_tw);
+            retain.push(buf_p);
             read_from_a = !read_from_a;
         }
 
@@ -299,6 +307,8 @@ impl MetalStockhamR2 {
                 tg,
                 tpg,
             );
+            retain.push(buf_tw);
+            retain.push(buf_p);
             read_from_a = !read_from_a;
         }
 
@@ -308,13 +318,14 @@ impl MetalStockhamR2 {
         let inv_n = M31::reduce(n as u64).inv();
         self.ctx.encode_normalize(
             cmd,
+            &mut retain,
             &self.normalize_pipeline,
             result_buf,
             n,
             inv_n,
         )?;
 
-        let total_ns = MetalContext::submit_batch(cmd)?;
+        let total_ns = MetalContext::submit_batch(cmd, &retain)?;
         let result = MetalContext::read_buffer(result_buf, n);
         Ok((result, total_ns))
     }

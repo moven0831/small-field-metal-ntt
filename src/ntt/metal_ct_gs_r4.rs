@@ -79,12 +79,14 @@ impl MetalCtGsR4 {
 
         let tile_log = log_n.min(MAX_TILE_LOG);
         let cmd = self.ctx.begin_batch();
+        let mut retain = Vec::new();
 
         // ── Device-memory phase: layers (log_n-1) down to tile_log ─────
         let num_device_layers = log_n - tile_log;
         if num_device_layers > 0 {
             self.encode_device_phase(
                 cmd,
+                &mut retain,
                 &buf_data,
                 &twiddles,
                 n,
@@ -97,6 +99,7 @@ impl MetalCtGsR4 {
         if tile_log > 0 {
             self.encode_threadgroup_phase(
                 cmd,
+                &mut retain,
                 &buf_data,
                 &twiddles,
                 n,
@@ -104,7 +107,7 @@ impl MetalCtGsR4 {
             )?;
         }
 
-        let total_ns = MetalContext::submit_batch(cmd)?;
+        let total_ns = MetalContext::submit_batch(cmd, &retain)?;
         let result = MetalContext::read_buffer(&buf_data, n);
         Ok((result, total_ns))
     }
@@ -112,6 +115,7 @@ impl MetalCtGsR4 {
     fn encode_device_phase(
         &self,
         cmd: &CommandBufferRef,
+        retain: &mut Vec<Buffer>,
         buf_data: &Buffer,
         twiddles: &[Vec<M31>],
         n: usize,
@@ -131,6 +135,7 @@ impl MetalCtGsR4 {
             let inner = 1usize << (k - 1);
             self.ctx.encode_butterfly_r4(
                 cmd,
+                retain,
                 &self.r4_device_pipeline,
                 buf_data,
                 &twiddles[k],
@@ -148,6 +153,7 @@ impl MetalCtGsR4 {
             let stride = 1usize << k;
             self.ctx.encode_butterfly_r2(
                 cmd,
+                retain,
                 &self.r2_device_pipeline,
                 buf_data,
                 &twiddles[k],
@@ -162,6 +168,7 @@ impl MetalCtGsR4 {
     fn encode_threadgroup_phase(
         &self,
         cmd: &CommandBufferRef,
+        retain: &mut Vec<Buffer>,
         buf_data: &Buffer,
         twiddles: &[Vec<M31>],
         n: usize,
@@ -220,6 +227,8 @@ impl MetalCtGsR4 {
             tg,
             tpg,
         );
+        retain.push(buf_tw);
+        retain.push(buf_p);
         Ok(())
     }
 
@@ -243,6 +252,7 @@ impl MetalCtGsR4 {
 
         let buf_data = self.ctx.buffer_from_slice(input)?;
         let cmd = self.ctx.begin_batch();
+        let mut retain = Vec::new();
 
         let tile_log = log_n.min(MAX_TILE_LOG);
 
@@ -250,6 +260,7 @@ impl MetalCtGsR4 {
         if tile_log > 0 {
             self.encode_threadgroup_inverse(
                 cmd,
+                &mut retain,
                 &buf_data,
                 &itwiddles,
                 n,
@@ -262,6 +273,7 @@ impl MetalCtGsR4 {
         if num_device_layers > 0 {
             self.encode_device_inverse(
                 cmd,
+                &mut retain,
                 &buf_data,
                 &itwiddles,
                 n,
@@ -274,13 +286,14 @@ impl MetalCtGsR4 {
         let inv_n = M31::reduce(n as u64).inv();
         self.ctx.encode_normalize(
             cmd,
+            &mut retain,
             &self.normalize_pipeline,
             &buf_data,
             n,
             inv_n,
         )?;
 
-        let total_ns = MetalContext::submit_batch(cmd)?;
+        let total_ns = MetalContext::submit_batch(cmd, &retain)?;
         let result = MetalContext::read_buffer(&buf_data, n);
         Ok((result, total_ns))
     }
@@ -288,6 +301,7 @@ impl MetalCtGsR4 {
     fn encode_device_inverse(
         &self,
         cmd: &CommandBufferRef,
+        retain: &mut Vec<Buffer>,
         buf_data: &Buffer,
         itwiddles: &[Vec<M31>],
         n: usize,
@@ -307,6 +321,7 @@ impl MetalCtGsR4 {
             let stride = 1usize << k;
             self.ctx.encode_butterfly_r2(
                 cmd,
+                retain,
                 &self.r2_device_inv_pipeline,
                 buf_data,
                 &itwiddles[k],
@@ -324,6 +339,7 @@ impl MetalCtGsR4 {
             let inner = 1usize << k_inner;
             self.ctx.encode_butterfly_r4(
                 cmd,
+                retain,
                 &self.r4_device_inv_pipeline,
                 buf_data,
                 &itwiddles[k_outer],
@@ -341,6 +357,7 @@ impl MetalCtGsR4 {
     fn encode_threadgroup_inverse(
         &self,
         cmd: &CommandBufferRef,
+        retain: &mut Vec<Buffer>,
         buf_data: &Buffer,
         itwiddles: &[Vec<M31>],
         n: usize,
@@ -402,6 +419,8 @@ impl MetalCtGsR4 {
             tg,
             tpg,
         );
+        retain.push(buf_tw);
+        retain.push(buf_p);
         Ok(())
     }
 }

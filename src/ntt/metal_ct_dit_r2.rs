@@ -53,12 +53,14 @@ impl MetalCtDitR2 {
 
         let buf_data = self.ctx.buffer_from_slice(input)?;
         let cmd = self.ctx.begin_batch();
+        let mut retain = Vec::new();
 
         // Process layers from log_n-1 down to 0 (same order as CPU reference forward)
         for layer in (0..log_n).rev() {
             let stride = 1usize << layer;
             self.ctx.encode_butterfly_r2(
                 cmd,
+                &mut retain,
                 &self.butterfly_pipeline,
                 &buf_data,
                 &twiddles[layer],
@@ -67,7 +69,7 @@ impl MetalCtDitR2 {
             )?;
         }
 
-        let total_ns = MetalContext::submit_batch(cmd)?;
+        let total_ns = MetalContext::submit_batch(cmd, &retain)?;
         let result = MetalContext::read_buffer(&buf_data, n);
         Ok((result, total_ns))
     }

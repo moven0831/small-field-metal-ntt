@@ -175,6 +175,11 @@ impl MetalContext {
     // Encode multiple dispatches into a single command buffer, submit once.
     // Metal inserts implicit memory barriers between compute encoders on
     // the same command buffer, so sequential NTT layers are safe.
+    //
+    // Temporary buffers (twiddles, params) created during encoding are pushed
+    // into a `Vec<Buffer>` ("retain list") that the caller must keep alive
+    // until `submit_batch` returns. This ensures GPU reads valid memory
+    // regardless of Metal's Obj-C retain/release bridging details.
 
     /// Create a new command buffer for batching multiple dispatches.
     pub fn begin_batch(&self) -> &CommandBufferRef {
@@ -201,7 +206,13 @@ impl MetalContext {
 
     /// Commit a batched command buffer and wait for GPU completion.
     /// Returns wall-clock time in nanoseconds.
-    pub fn submit_batch(cmd_buffer: &CommandBufferRef) -> Result<u64, NttError> {
+    ///
+    /// The `_retain` parameter keeps temporary buffers alive until GPU
+    /// completion. Drop it after this call returns.
+    pub fn submit_batch(
+        cmd_buffer: &CommandBufferRef,
+        _retain: &[Buffer],
+    ) -> Result<u64, NttError> {
         let start = std::time::Instant::now();
         cmd_buffer.commit();
         cmd_buffer.wait_until_completed();
@@ -218,9 +229,11 @@ impl MetalContext {
     }
 
     /// Encode a radix-2 butterfly dispatch into a batch command buffer.
+    /// Pushes temporary buffers into `retain` to keep them alive until GPU completion.
     pub fn encode_butterfly_r2(
         &self,
         cmd_buffer: &CommandBufferRef,
+        retain: &mut Vec<Buffer>,
         pipeline: &ComputePipelineState,
         buf_data: &Buffer,
         twiddles: &[M31],
@@ -237,14 +250,18 @@ impl MetalContext {
         let (tg, tpg) = Self::compute_grid_1d(num_butterflies, max_tpg.min(256));
 
         Self::encode_dispatch(cmd_buffer, pipeline, &[buf_data, &buf_tw, &buf_p], tg, tpg);
+        retain.push(buf_tw);
+        retain.push(buf_p);
         Ok(())
     }
 
     /// Encode a radix-4 butterfly dispatch into a batch command buffer.
+    /// Pushes temporary buffers into `retain` to keep them alive until GPU completion.
     #[allow(clippy::too_many_arguments)]
     pub fn encode_butterfly_r4(
         &self,
         cmd_buffer: &CommandBufferRef,
+        retain: &mut Vec<Buffer>,
         pipeline: &ComputePipelineState,
         buf_data: &Buffer,
         tw_outer: &[M31],
@@ -271,13 +288,18 @@ impl MetalContext {
             tg,
             tpg,
         );
+        retain.push(buf_tw_o);
+        retain.push(buf_tw_i);
+        retain.push(buf_p);
         Ok(())
     }
 
     /// Encode a normalize dispatch into a batch command buffer.
+    /// Pushes temporary buffers into `retain` to keep them alive until GPU completion.
     pub fn encode_normalize(
         &self,
         cmd_buffer: &CommandBufferRef,
+        retain: &mut Vec<Buffer>,
         pipeline: &ComputePipelineState,
         buf_data: &Buffer,
         n: usize,
@@ -290,6 +312,7 @@ impl MetalContext {
         let (tg, tpg) = Self::compute_grid_1d(n as u64, max_tpg.min(256));
 
         Self::encode_dispatch(cmd_buffer, pipeline, &[buf_data, &buf_p], tg, tpg);
+        retain.push(buf_p);
         Ok(())
     }
 

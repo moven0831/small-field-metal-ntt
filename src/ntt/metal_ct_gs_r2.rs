@@ -79,6 +79,7 @@ impl MetalCtGsR2 {
 
         let buf_data = self.ctx.buffer_from_slice(input)?;
         let cmd = self.ctx.begin_batch();
+        let mut retain = Vec::new();
 
         let tile_log = log_n.min(MAX_TILE_LOG);
 
@@ -88,6 +89,7 @@ impl MetalCtGsR2 {
             let stride = 1usize << layer;
             self.ctx.encode_butterfly_r2(
                 cmd,
+                &mut retain,
                 &self.forward_device_pipeline,
                 &buf_data,
                 &twiddles[layer],
@@ -101,6 +103,7 @@ impl MetalCtGsR2 {
         if tile_log > 0 {
             self.encode_threadgroup_forward(
                 cmd,
+                &mut retain,
                 &buf_data,
                 &twiddles,
                 n,
@@ -108,7 +111,7 @@ impl MetalCtGsR2 {
             )?;
         }
 
-        let total_ns = MetalContext::submit_batch(cmd)?;
+        let total_ns = MetalContext::submit_batch(cmd, &retain)?;
         let result = MetalContext::read_buffer(&buf_data, n);
         Ok((result, total_ns))
     }
@@ -135,6 +138,7 @@ impl MetalCtGsR2 {
 
         let buf_data = self.ctx.buffer_from_slice(input)?;
         let cmd = self.ctx.begin_batch();
+        let mut retain = Vec::new();
 
         let tile_log = log_n.min(MAX_TILE_LOG);
 
@@ -143,6 +147,7 @@ impl MetalCtGsR2 {
         if tile_log > 0 {
             self.encode_threadgroup_inverse(
                 cmd,
+                &mut retain,
                 &buf_data,
                 &itwiddles,
                 n,
@@ -156,6 +161,7 @@ impl MetalCtGsR2 {
             let stride = 1usize << layer;
             self.ctx.encode_butterfly_r2(
                 cmd,
+                &mut retain,
                 &self.inverse_device_pipeline,
                 &buf_data,
                 &itwiddles[layer],
@@ -168,13 +174,14 @@ impl MetalCtGsR2 {
         let inv_n = M31::reduce(n as u64).inv();
         self.ctx.encode_normalize(
             cmd,
+            &mut retain,
             &self.normalize_pipeline,
             &buf_data,
             n,
             inv_n,
         )?;
 
-        let total_ns = MetalContext::submit_batch(cmd)?;
+        let total_ns = MetalContext::submit_batch(cmd, &retain)?;
         let result = MetalContext::read_buffer(&buf_data, n);
         Ok((result, total_ns))
     }
@@ -183,6 +190,7 @@ impl MetalCtGsR2 {
     fn encode_threadgroup_forward(
         &self,
         cmd: &CommandBufferRef,
+        retain: &mut Vec<Buffer>,
         buf_data: &Buffer,
         twiddles: &[Vec<M31>],
         n: usize,
@@ -227,6 +235,8 @@ impl MetalCtGsR2 {
             tg,
             tpg,
         );
+        retain.push(buf_tw);
+        retain.push(buf_p);
         Ok(())
     }
 
@@ -234,6 +244,7 @@ impl MetalCtGsR2 {
     fn encode_threadgroup_inverse(
         &self,
         cmd: &CommandBufferRef,
+        retain: &mut Vec<Buffer>,
         buf_data: &Buffer,
         itwiddles: &[Vec<M31>],
         n: usize,
@@ -277,6 +288,8 @@ impl MetalCtGsR2 {
             tg,
             tpg,
         );
+        retain.push(buf_tw);
+        retain.push(buf_p);
         Ok(())
     }
 }
