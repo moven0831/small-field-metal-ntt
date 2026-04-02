@@ -54,29 +54,15 @@ impl MetalCtDitR2 {
         let buf_data = self.ctx.buffer_from_slice(input)?;
         let mut total_ns: u64 = 0;
 
-        // Query max threadgroup size for this pipeline
-        let max_tpg = MetalContext::max_threads_per_threadgroup(&self.butterfly_pipeline) as u64;
-        let tpg_width = max_tpg.min(256);
-
         // Process layers from log_n-1 down to 0 (same order as CPU reference forward)
         for layer in (0..log_n).rev() {
             let stride = 1usize << layer;
-            let num_butterflies = (n / 2) as u32;
-
-            let tw_data: Vec<u32> = twiddles[layer].iter().map(|m| m.0).collect();
-            let buf_tw = self.ctx.buffer_from_slice(&tw_data)?;
-
-            let params: Vec<u32> = vec![stride as u32, n as u32];
-            let buf_p = self.ctx.buffer_from_slice(&params)?;
-
-            let tg = MTLSize::new(((num_butterflies as u64) + tpg_width - 1) / tpg_width, 1, 1);
-            let tpg = MTLSize::new(tpg_width.min(num_butterflies as u64), 1, 1);
-
-            let ns = self.ctx.dispatch_and_wait(
+            let ns = self.ctx.dispatch_butterfly_r2(
                 &self.butterfly_pipeline,
-                &[&buf_data, &buf_tw, &buf_p],
-                tg,
-                tpg,
+                &buf_data,
+                &twiddles[layer],
+                stride,
+                n,
             )?;
             total_ns += ns;
         }

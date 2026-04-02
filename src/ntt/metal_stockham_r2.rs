@@ -306,24 +306,11 @@ impl MetalStockhamR2 {
         // Normalize is in-place on whichever buffer holds the result
         let result_buf = if read_from_a { &buf_a } else { &buf_b };
         let inv_n = M31::reduce(n as u64).inv();
-        let norm_params: Vec<u32> = vec![n as u32, inv_n.0];
-        let buf_norm_p = self.ctx.buffer_from_slice(&norm_params)?;
-
-        let norm_max_tpg =
-            MetalContext::max_threads_per_threadgroup(&self.normalize_pipeline) as u64;
-        let norm_tpg_width = norm_max_tpg.min(256);
-        let norm_tg = MTLSize::new(
-            (n as u64 + norm_tpg_width - 1) / norm_tpg_width,
-            1,
-            1,
-        );
-        let norm_tpg = MTLSize::new(norm_tpg_width.min(n as u64), 1, 1);
-
-        let ns = self.ctx.dispatch_and_wait(
+        let ns = self.ctx.dispatch_normalize(
             &self.normalize_pipeline,
-            &[result_buf, &buf_norm_p],
-            norm_tg,
-            norm_tpg,
+            result_buf,
+            n,
+            inv_n,
         )?;
         total_ns += ns;
 
