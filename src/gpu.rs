@@ -85,7 +85,14 @@ impl MetalContext {
     }
 
     /// Allocate a GPU buffer of the given byte length, initialized to zero.
+    ///
+    /// Note: the `metal` crate panics internally if the allocation fails (Obj-C
+    /// null return). Zero-length allocations are rejected here to avoid
+    /// undefined behavior in Metal.
     pub fn alloc_buffer(&self, byte_len: usize) -> Result<Buffer, NttError> {
+        if byte_len == 0 {
+            return Err(NttError::BufferAllocFailed { requested_bytes: 0 });
+        }
         let buffer = self.device.new_buffer(
             byte_len as u64,
             MTLResourceOptions::StorageModeShared,
@@ -94,8 +101,14 @@ impl MetalContext {
     }
 
     /// Allocate a GPU buffer and copy data into it.
+    ///
+    /// Note: the `metal` crate panics internally if the allocation fails.
+    /// Empty slices are rejected to avoid zero-length Metal allocations.
     pub fn buffer_from_slice(&self, data: &[u32]) -> Result<Buffer, NttError> {
-        let byte_len = data.len() * std::mem::size_of::<u32>();
+        if data.is_empty() {
+            return Err(NttError::BufferAllocFailed { requested_bytes: 0 });
+        }
+        let byte_len = std::mem::size_of_val(data);
         let buffer = self.device.new_buffer_with_data(
             data.as_ptr() as *const _,
             byte_len as u64,
@@ -435,60 +448,43 @@ impl std::fmt::Display for DeviceInfo {
 }
 
 /// Read and concatenate shader source files from a directory.
-/// Handles #include directives by inlining the referenced files.
+///
+/// Uses an explicit ordered file list (not directory scan) to ensure
+/// deterministic compilation across platforms. Each file gets a marker
+/// comment so Metal compiler errors can be traced back to the source file.
 fn read_shader_source(shader_dir: &Path) -> Result<String, NttError> {
-    // Read files in dependency order: headers first, then kernels
+    // Explicit ordered list: headers first (dependency order), then kernels (alphabetical).
+    // This avoids non-deterministic std::fs::read_dir ordering.
+    let headers = &["m31_field.metal", "ntt_common.metal"];
+    let kernels = &[
+        "babybear_field.metal",
+        "ntt_ct_dit_r2.metal",
+        "ntt_ct_gs_r2.metal",
+        "ntt_ct_gs_r4.metal",
+        "ntt_stockham_r2.metal",
+        "test_kernels.metal",
+    ];
+
     let mut source = String::new();
 
-    // Read header files first (no #include resolution needed for headers)
-    for name in &["m31_field.metal", "ntt_common.metal"] {
+    for &name in headers.iter().chain(kernels.iter()) {
         let path = shader_dir.join(name);
-        if path.exists() {
-            let content = std::fs::read_to_string(&path).map_err(|e| {
-                NttError::ShaderCompileError(format!("Failed to read {}: {}", path.display(), e))
-            })?;
-            // Strip #include directives (we're manually concatenating)
-            let filtered: String = content
-                .lines()
-                .filter(|line| !line.trim_start().starts_with("#include"))
-                .collect::<Vec<_>>()
-                .join("\n");
-            source.push_str(&filtered);
-            source.push('\n');
+        if !path.exists() {
+            continue;
         }
-    }
-
-    // Read kernel files
-    let entries = std::fs::read_dir(shader_dir).map_err(|e| {
-        NttError::ShaderCompileError(format!(
-            "Failed to read shader directory {}: {}",
-            shader_dir.display(),
-            e
-        ))
-    })?;
-
-    for entry in entries {
-        let entry = entry.map_err(|e| {
-            NttError::ShaderCompileError(format!("Failed to read directory entry: {}", e))
+        let content = std::fs::read_to_string(&path).map_err(|e| {
+            NttError::ShaderCompileError(format!("Failed to read {}: {}", path.display(), e))
         })?;
-        let path = entry.path();
-        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-            // Skip headers (already included) and non-.metal files
-            if name == "m31_field.metal" || name == "ntt_common.metal" || !name.ends_with(".metal")
-            {
-                continue;
-            }
-            let content = std::fs::read_to_string(&path).map_err(|e| {
-                NttError::ShaderCompileError(format!("Failed to read {}: {}", path.display(), e))
-            })?;
-            let filtered: String = content
-                .lines()
-                .filter(|line| !line.trim_start().starts_with("#include"))
-                .collect::<Vec<_>>()
-                .join("\n");
-            source.push_str(&filtered);
-            source.push('\n');
-        }
+        // Marker for error diagnostics: Metal compiler errors reference line numbers
+        // in the concatenated source; this comment helps trace back to the original file.
+        source.push_str(&format!("\n// --- begin {} ---\n", name));
+        let filtered: String = content
+            .lines()
+            .filter(|line| !line.trim_start().starts_with("#include"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        source.push_str(&filtered);
+        source.push_str(&format!("\n// --- end {} ---\n", name));
     }
 
     Ok(source)

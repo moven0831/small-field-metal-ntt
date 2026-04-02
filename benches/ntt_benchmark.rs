@@ -66,6 +66,9 @@ struct BenchResult {
     median_us: f64,
     min_us: f64,
     max_us: f64,
+    stddev_us: f64,
+    p95_us: f64,
+    cv_pct: f64,
     throughput_melem_s: f64,
 }
 
@@ -88,9 +91,15 @@ fn bench_variant<F: Field>(
     }
 
     times.sort_by(|a, b| a.partial_cmp(b).unwrap());
-    let median = times[times.len() / 2];
+    let n = times.len();
+    let median = times[n / 2];
     let min = times[0];
-    let max = times[times.len() - 1];
+    let max = times[n - 1];
+    let p95 = times[(n as f64 * 0.95) as usize];
+    let mean = times.iter().sum::<f64>() / n as f64;
+    let variance = times.iter().map(|t| (t - mean).powi(2)).sum::<f64>() / n as f64;
+    let stddev = variance.sqrt();
+    let cv = if mean > 0.0 { stddev / mean * 100.0 } else { 0.0 };
     let throughput = (size as f64) / (median / 1_000_000.0) / 1_000_000.0; // Melem/s
 
     BenchResult {
@@ -99,6 +108,9 @@ fn bench_variant<F: Field>(
         median_us: median,
         min_us: min,
         max_us: max,
+        stddev_us: stddev,
+        p95_us: p95,
+        cv_pct: cv,
         throughput_melem_s: throughput,
     }
 }
@@ -182,7 +194,7 @@ fn run_algorithm_shootout() {
     let v4 = MetalCtGsR4::new(&dir).expect("Failed to init V4");
 
     // CSV header
-    println!("variant,size,median_us,min_us,max_us,throughput_melem_s");
+    println!("variant,size,median_us,min_us,max_us,stddev_us,p95_us,cv_pct,throughput_melem_s");
 
     let mut all_results: Vec<BenchResult> = Vec::new();
 
@@ -192,23 +204,23 @@ fn run_algorithm_shootout() {
         eprintln!("Benchmarking size 2^{} ({} elements)...", size.trailing_zeros(), size);
 
         let r = bench_variant("cpu-reference", &cpu, &data, size);
-        println!("{},{},{:.1},{:.1},{:.1},{:.1}", r.variant, r.size, r.median_us, r.min_us, r.max_us, r.throughput_melem_s);
+        println!("{},{},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1}", r.variant, r.size, r.median_us, r.min_us, r.max_us, r.stddev_us, r.p95_us, r.cv_pct, r.throughput_melem_s);
         all_results.push(r);
 
         let r = bench_variant("v1-ct-dit-r2", &v1, &data, size);
-        println!("{},{},{:.1},{:.1},{:.1},{:.1}", r.variant, r.size, r.median_us, r.min_us, r.max_us, r.throughput_melem_s);
+        println!("{},{},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1}", r.variant, r.size, r.median_us, r.min_us, r.max_us, r.stddev_us, r.p95_us, r.cv_pct, r.throughput_melem_s);
         all_results.push(r);
 
         let r = bench_variant("v2-ct-gs-r2", &v2, &data, size);
-        println!("{},{},{:.1},{:.1},{:.1},{:.1}", r.variant, r.size, r.median_us, r.min_us, r.max_us, r.throughput_melem_s);
+        println!("{},{},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1}", r.variant, r.size, r.median_us, r.min_us, r.max_us, r.stddev_us, r.p95_us, r.cv_pct, r.throughput_melem_s);
         all_results.push(r);
 
         let r = bench_variant("v3-stockham-r2", &v3, &data, size);
-        println!("{},{},{:.1},{:.1},{:.1},{:.1}", r.variant, r.size, r.median_us, r.min_us, r.max_us, r.throughput_melem_s);
+        println!("{},{},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1}", r.variant, r.size, r.median_us, r.min_us, r.max_us, r.stddev_us, r.p95_us, r.cv_pct, r.throughput_melem_s);
         all_results.push(r);
 
         let r = bench_variant("v4-ct-gs-r4", &v4, &data, size);
-        println!("{},{},{:.1},{:.1},{:.1},{:.1}", r.variant, r.size, r.median_us, r.min_us, r.max_us, r.throughput_melem_s);
+        println!("{},{},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1}", r.variant, r.size, r.median_us, r.min_us, r.max_us, r.stddev_us, r.p95_us, r.cv_pct, r.throughput_melem_s);
         all_results.push(r);
     }
 
@@ -247,6 +259,17 @@ fn run_algorithm_shootout() {
         eprintln!();
         eprintln!("Winner at 2^{}: {} ({:.0} us, {:.1} Melem/s)",
             largest.trailing_zeros(), winner.variant, winner.median_us, winner.throughput_melem_s);
+    }
+
+    // Warn about noisy measurements (CV > 10%)
+    let noisy: Vec<&BenchResult> = all_results.iter().filter(|r| r.cv_pct > 10.0).collect();
+    if !noisy.is_empty() {
+        eprintln!();
+        eprintln!("Warning: {} measurement(s) with CV > 10% (noisy):", noisy.len());
+        for r in &noisy {
+            eprintln!("  {} at 2^{}: CV={:.1}% (stddev={:.1}us, median={:.1}us)",
+                r.variant, r.size.trailing_zeros(), r.cv_pct, r.stddev_us, r.median_us);
+        }
     }
 
     eprintln!();
