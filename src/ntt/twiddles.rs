@@ -12,6 +12,7 @@ use crate::field::circle::Coset;
 use crate::field::m31::M31;
 use crate::field::Field;
 use std::cell::RefCell;
+use std::rc::Rc;
 
 /// Generate forward twiddle factors for each layer.
 ///
@@ -78,15 +79,16 @@ pub fn bit_reverse_idx(index: usize, log_size: u32) -> usize {
 /// Cached twiddle factor storage to avoid recomputing per NTT call.
 ///
 /// Caches forward and inverse twiddles for the most recently used `log_n`.
-/// Thread-safe for single-threaded use (uses `RefCell`).
+/// Uses `Rc` to avoid cloning the full twiddle vectors on access.
+/// Not `Send`/`Sync` — single-threaded only (uses `RefCell` + `Rc`).
 pub struct TwiddleCache {
     inner: RefCell<Option<CachedEntry>>,
 }
 
 struct CachedEntry {
     log_n: u32,
-    forward: Vec<Vec<M31>>,
-    inverse: Vec<Vec<M31>>,
+    forward: Rc<Vec<Vec<M31>>>,
+    inverse: Rc<Vec<Vec<M31>>>,
 }
 
 impl TwiddleCache {
@@ -97,15 +99,17 @@ impl TwiddleCache {
     }
 
     /// Get forward twiddles for the given log_n, computing and caching if needed.
-    pub fn forward(&self, log_n: u32) -> Vec<Vec<M31>> {
+    /// Returns an `Rc` — cheap reference count bump, no data copy.
+    pub fn forward(&self, log_n: u32) -> Rc<Vec<Vec<M31>>> {
         self.ensure_cached(log_n);
-        self.inner.borrow().as_ref().unwrap().forward.clone()
+        Rc::clone(&self.inner.borrow().as_ref().expect("ensure_cached must populate cache").forward)
     }
 
     /// Get inverse twiddles for the given log_n, computing and caching if needed.
-    pub fn inverse(&self, log_n: u32) -> Vec<Vec<M31>> {
+    /// Returns an `Rc` — cheap reference count bump, no data copy.
+    pub fn inverse(&self, log_n: u32) -> Rc<Vec<Vec<M31>>> {
         self.ensure_cached(log_n);
-        self.inner.borrow().as_ref().unwrap().inverse.clone()
+        Rc::clone(&self.inner.borrow().as_ref().expect("ensure_cached must populate cache").inverse)
     }
 
     fn ensure_cached(&self, log_n: u32) {
@@ -117,8 +121,8 @@ impl TwiddleCache {
 
         if needs_recompute {
             let coset = Coset::odds(log_n);
-            let forward = generate_twiddles(&coset);
-            let inverse = generate_itwiddles(&coset);
+            let forward = Rc::new(generate_twiddles(&coset));
+            let inverse = Rc::new(generate_itwiddles(&coset));
             *self.inner.borrow_mut() = Some(CachedEntry {
                 log_n,
                 forward,
