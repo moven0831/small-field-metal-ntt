@@ -563,7 +563,7 @@ mod tests {
     }
 
     #[test]
-    fn test_size2_forward_and_roundtrip() {
+    fn test_size2_forward() {
         let gpu = match init() { Some(g) => g, None => return };
         assert_forward_matches_cpu(&gpu, &[2]);
     }
