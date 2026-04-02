@@ -11,18 +11,18 @@
 //! Total dispatches: log_n.
 //! Purpose: show the baseline cost of GPU NTT with zero optimization.
 
-use crate::field::circle::Coset;
 use crate::field::m31::M31;
 use crate::field::Field;
 use crate::gpu::MetalContext;
 use crate::ntt::{NttBackend, NttError};
-use crate::ntt::twiddles::generate_twiddles;
+use crate::ntt::twiddles::TwiddleCache;
 use metal::*;
 use std::path::Path;
 
 pub struct MetalCtDitR2 {
     ctx: MetalContext,
     butterfly_pipeline: ComputePipelineState,
+    twiddle_cache: TwiddleCache,
 }
 
 impl MetalCtDitR2 {
@@ -33,6 +33,7 @@ impl MetalCtDitR2 {
         Ok(MetalCtDitR2 {
             ctx,
             butterfly_pipeline,
+            twiddle_cache: TwiddleCache::new(),
         })
     }
 
@@ -48,8 +49,7 @@ impl MetalCtDitR2 {
         }
 
         // Generate twiddles on CPU (same as cpu_reference)
-        let coset = Coset::odds(log_n as u32);
-        let twiddles = generate_twiddles(&coset);
+        let twiddles = self.twiddle_cache.forward(log_n as u32);
 
         let buf_data = self.ctx.buffer_from_slice(input)?;
         let mut total_ns: u64 = 0;

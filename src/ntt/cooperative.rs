@@ -25,12 +25,11 @@
 //!
 //! This is a standalone function, not part of the NttBackend trait.
 
-use crate::field::circle::Coset;
 use crate::field::m31::M31;
 use crate::field::Field;
 use crate::gpu::MetalContext;
 use crate::ntt::NttError;
-use crate::ntt::twiddles::generate_twiddles;
+use crate::ntt::twiddles::TwiddleCache;
 use metal::*;
 use std::path::Path;
 use std::time::Instant;
@@ -52,6 +51,7 @@ pub struct CooperativeNttContext {
     pub ctx: MetalContext,
     device_pipeline: ComputePipelineState,
     tg_pipeline: ComputePipelineState,
+    twiddle_cache: TwiddleCache,
 }
 
 const MAX_TILE_LOG: usize = 13;
@@ -66,6 +66,7 @@ impl CooperativeNttContext {
             ctx,
             device_pipeline,
             tg_pipeline,
+            twiddle_cache: TwiddleCache::new(),
         })
     }
 }
@@ -104,8 +105,7 @@ pub fn cooperative_forward_ntt(
     }
 
     // Generate twiddles (same as CPU reference and V2)
-    let coset = Coset::odds(log_n as u32);
-    let twiddles = generate_twiddles(&coset);
+    let twiddles = coop.twiddle_cache.forward(log_n as u32);
 
     // Allocate shared buffer — CPU and GPU operate on the same memory
     let buf_data = coop.ctx.buffer_from_slice(input)?;

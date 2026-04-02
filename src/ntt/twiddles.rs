@@ -11,6 +11,7 @@
 use crate::field::circle::Coset;
 use crate::field::m31::M31;
 use crate::field::Field;
+use std::cell::RefCell;
 
 /// Generate forward twiddle factors for each layer.
 ///
@@ -72,4 +73,57 @@ pub fn bit_reverse_idx(index: usize, log_size: u32) -> usize {
         val >>= 1;
     }
     result as usize
+}
+
+/// Cached twiddle factor storage to avoid recomputing per NTT call.
+///
+/// Caches forward and inverse twiddles for the most recently used `log_n`.
+/// Thread-safe for single-threaded use (uses `RefCell`).
+pub struct TwiddleCache {
+    inner: RefCell<Option<CachedEntry>>,
+}
+
+struct CachedEntry {
+    log_n: u32,
+    forward: Vec<Vec<M31>>,
+    inverse: Vec<Vec<M31>>,
+}
+
+impl TwiddleCache {
+    pub fn new() -> Self {
+        Self {
+            inner: RefCell::new(None),
+        }
+    }
+
+    /// Get forward twiddles for the given log_n, computing and caching if needed.
+    pub fn forward(&self, log_n: u32) -> Vec<Vec<M31>> {
+        self.ensure_cached(log_n);
+        self.inner.borrow().as_ref().unwrap().forward.clone()
+    }
+
+    /// Get inverse twiddles for the given log_n, computing and caching if needed.
+    pub fn inverse(&self, log_n: u32) -> Vec<Vec<M31>> {
+        self.ensure_cached(log_n);
+        self.inner.borrow().as_ref().unwrap().inverse.clone()
+    }
+
+    fn ensure_cached(&self, log_n: u32) {
+        let needs_recompute = self
+            .inner
+            .borrow()
+            .as_ref()
+            .map_or(true, |e| e.log_n != log_n);
+
+        if needs_recompute {
+            let coset = Coset::odds(log_n);
+            let forward = generate_twiddles(&coset);
+            let inverse = generate_itwiddles(&coset);
+            *self.inner.borrow_mut() = Some(CachedEntry {
+                log_n,
+                forward,
+                inverse,
+            });
+        }
+    }
 }

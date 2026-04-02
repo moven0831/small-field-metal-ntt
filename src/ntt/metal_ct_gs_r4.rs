@@ -11,12 +11,11 @@
 //! Forward NTT uses CT-DIT radix-4 (high-to-low layer pairs).
 //! Inverse NTT uses GS-DIF radix-4 (low-to-high layer pairs) + normalization.
 
-use crate::field::circle::Coset;
 use crate::field::m31::M31;
 use crate::field::Field;
 use crate::gpu::MetalContext;
 use crate::ntt::{NttBackend, NttError};
-use crate::ntt::twiddles::{generate_twiddles, generate_itwiddles};
+use crate::ntt::twiddles::TwiddleCache;
 use metal::*;
 use std::path::Path;
 
@@ -31,6 +30,7 @@ pub struct MetalCtGsR4 {
     r4_device_inv_pipeline: ComputePipelineState,
     r2_device_inv_pipeline: ComputePipelineState,
     normalize_pipeline: ComputePipelineState,
+    twiddle_cache: TwiddleCache,
 }
 
 impl MetalCtGsR4 {
@@ -53,6 +53,7 @@ impl MetalCtGsR4 {
             r4_device_inv_pipeline: r4_dev_inv,
             r2_device_inv_pipeline: r2_dev_inv,
             normalize_pipeline: normalize,
+            twiddle_cache: TwiddleCache::new(),
         })
     }
 
@@ -72,8 +73,7 @@ impl MetalCtGsR4 {
             return Ok((input.to_vec(), 0));
         }
 
-        let coset = Coset::odds(log_n as u32);
-        let twiddles = generate_twiddles(&coset);
+        let twiddles = self.twiddle_cache.forward(log_n as u32);
 
         let buf_data = self.ctx.buffer_from_slice(input)?;
         let mut total_ns: u64 = 0;
@@ -233,8 +233,7 @@ impl MetalCtGsR4 {
             return Ok((input.to_vec(), 0));
         }
 
-        let coset = Coset::odds(log_n as u32);
-        let itwiddles = generate_itwiddles(&coset);
+        let itwiddles = self.twiddle_cache.inverse(log_n as u32);
 
         let buf_data = self.ctx.buffer_from_slice(input)?;
         let mut total_ns: u64 = 0;
