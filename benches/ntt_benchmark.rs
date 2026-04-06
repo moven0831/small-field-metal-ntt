@@ -319,11 +319,186 @@ fn run_cooperative_sweep() {
     eprintln!("Config: {} warmup + {} iterations per (size, split) pair", COOP_WARMUP, COOP_ITERATIONS);
 }
 
+// ─── Coset LDE Benchmark ────────────────────────────────────────────────
+// Matches zk-autoresearch parameters: BabyBear field, 2^20 x 256 columns.
+
+fn run_coset_lde_benchmark() {
+    use small_field_metal_ntt::field::babybear::BabyBear;
+    use small_field_metal_ntt::lde::CosetLdeBatch;
+
+    let dir = shader_dir();
+    let lde = CosetLdeBatch::new(&dir).expect("Failed to init CosetLdeBatch");
+
+    let info = lde.device_info();
+    eprintln!("GPU: {}", info);
+    eprintln!();
+
+    println!("mode,n,batch_size,expansion,median_ms,min_ms,max_ms,stddev_ms,cv_pct,throughput_melem_s");
+
+    let configs: &[(usize, usize, usize)] = &[
+        // (log_n, batch_size, added_bits)
+        (16, 256, 1),   // warmup: smaller size
+        (18, 256, 1),   // medium
+        (20, 256, 1),   // target: matches zk-autoresearch (2x expansion)
+        (20, 256, 2),   // 4x expansion
+    ];
+
+    for &(log_n, batch_size, added_bits) in configs {
+        let n = 1usize << log_n;
+        let n_ext = n << added_bits;
+        let expansion = 1 << added_bits;
+
+        eprintln!(
+            "Coset LDE: 2^{} x {} cols, {}x expansion (output: {} Melems, {:.0} MB)...",
+            log_n, batch_size, expansion,
+            n_ext * batch_size / 1_000_000,
+            (n_ext * batch_size * 4) as f64 / (1024.0 * 1024.0),
+        );
+
+        // Generate test data (BabyBear Montgomery form)
+        let input: Vec<u32> = {
+            let mut seed: u64 = 42 + log_n as u64;
+            (0..n * batch_size)
+                .map(|_| {
+                    seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+                    BabyBear::to_monty(((seed >> 33) as u32) % BabyBear::P).0
+                })
+                .collect()
+        };
+
+        let mut times_ms = Vec::with_capacity(WARMUP + ITERATIONS);
+
+        for i in 0..(WARMUP + ITERATIONS) {
+            let result = lde.execute(&input, log_n, batch_size, added_bits)
+                .expect("LDE execution failed");
+            if i >= WARMUP {
+                times_ms.push(result.total_ns as f64 / 1_000_000.0);
+            }
+        }
+
+        times_ms.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let nm = times_ms.len();
+        let median = times_ms[nm / 2];
+        let min = times_ms[0];
+        let max = times_ms[nm - 1];
+        let mean = times_ms.iter().sum::<f64>() / nm as f64;
+        let variance = times_ms.iter().map(|t| (t - mean).powi(2)).sum::<f64>() / nm as f64;
+        let stddev = variance.sqrt();
+        let cv = if mean > 0.0 { stddev / mean * 100.0 } else { 0.0 };
+        let output_elems = (n_ext * batch_size) as f64;
+        let throughput = output_elems / (median / 1000.0) / 1_000_000.0; // Melem/s
+
+        println!(
+            "coset-lde,{},{},{},{:.2},{:.2},{:.2},{:.2},{:.1},{:.1}",
+            n, batch_size, expansion, median, min, max, stddev, cv, throughput
+        );
+
+        eprintln!(
+            "  Median: {:.2} ms | Min: {:.2} ms | CV: {:.1}% | Throughput: {:.1} Melem/s",
+            median, min, cv, throughput
+        );
+    }
+
+    eprintln!();
+    eprintln!("╔═══════════════════════════════════════════════════════════════╗");
+    eprintln!("║              Coset LDE Comparison                            ║");
+    eprintln!("╠═══════════════════════════════════════════════════════════════╣");
+    eprintln!("║ zk-autoresearch (EPYC AVX512, BabyBear):                    ║");
+    eprintln!("║   2^20 x 256, coset_lde_batch: ~2699 ms                     ║");
+    eprintln!("║                                                              ║");
+    eprintln!("║ This benchmark (Apple Metal GPU, BabyBear):                  ║");
+    eprintln!("║   See results above                                          ║");
+    eprintln!("╚═══════════════════════════════════════════════════════════════╝");
+    eprintln!();
+    eprintln!("Config: {} warmup + {} iterations", WARMUP, ITERATIONS);
+}
+
+// ─── Batched NTT Benchmark ──────────────────────────────────────────────
+// Raw batched forward NTT throughput (no LDE overhead).
+
+fn run_batch_ntt_benchmark() {
+    use small_field_metal_ntt::field::babybear::BabyBear;
+    use small_field_metal_ntt::ntt::bb_metal_r2::BbMetalR2;
+
+    let dir = shader_dir();
+    let gpu = BbMetalR2::new(&dir).expect("Failed to init BbMetalR2");
+
+    let info = gpu.ctx().device_info();
+    eprintln!("GPU: {}", info);
+    eprintln!();
+
+    println!("mode,n,batch_size,median_ms,min_ms,max_ms,throughput_melem_s");
+
+    let configs: &[(usize, usize)] = &[
+        // (log_n, batch_size)
+        (14, 256),
+        (16, 256),
+        (18, 256),
+        (20, 256),
+        (20, 1),    // single NTT for comparison
+    ];
+
+    for &(log_n, batch_size) in configs {
+        let n = 1usize << log_n;
+        let total_elems = n * batch_size;
+
+        eprintln!(
+            "Batch NTT: 2^{} x {} cols ({} Melems)...",
+            log_n, batch_size, total_elems / 1_000_000,
+        );
+
+        let input: Vec<u32> = {
+            let mut seed: u64 = 99 + log_n as u64;
+            (0..total_elems)
+                .map(|_| {
+                    seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+                    BabyBear::to_monty(((seed >> 33) as u32) % BabyBear::P).0
+                })
+                .collect()
+        };
+
+        let mut times_ms = Vec::with_capacity(WARMUP + ITERATIONS);
+
+        for i in 0..(WARMUP + ITERATIONS) {
+            let (_, ns) = gpu
+                .forward_ntt_batch_gpu(&input, log_n, batch_size)
+                .expect("Batch NTT failed");
+            if i >= WARMUP {
+                times_ms.push(ns as f64 / 1_000_000.0);
+            }
+        }
+
+        times_ms.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let nm = times_ms.len();
+        let median = times_ms[nm / 2];
+        let min = times_ms[0];
+        let max = times_ms[nm - 1];
+        let throughput = (total_elems as f64) / (median / 1000.0) / 1_000_000.0;
+
+        println!(
+            "batch-ntt,{},{},{:.2},{:.2},{:.2},{:.1}",
+            n, batch_size, median, min, max, throughput
+        );
+
+        eprintln!(
+            "  Median: {:.2} ms | Throughput: {:.1} Melem/s",
+            median, throughput
+        );
+    }
+
+    eprintln!();
+    eprintln!("Config: {} warmup + {} iterations", WARMUP, ITERATIONS);
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
 
     if args.iter().any(|a| a == "--cooperative" || a == "--coop") {
         run_cooperative_sweep();
+    } else if args.iter().any(|a| a == "--coset-lde" || a == "--lde") {
+        run_coset_lde_benchmark();
+    } else if args.iter().any(|a| a == "--batch-ntt" || a == "--batch") {
+        run_batch_ntt_benchmark();
     } else {
         run_algorithm_shootout();
     }
