@@ -490,6 +490,108 @@ fn run_batch_ntt_benchmark() {
     eprintln!("Config: {} warmup + {} iterations", WARMUP, ITERATIONS);
 }
 
+// ─── BabyBear Algorithm Shootout ─────────────────────────────────────────
+// Compare all BabyBear NTT variants: CPU ref, V1 CT-DIT, V2 CT-GS R2, V3 Stockham, V4 CT-GS R4
+
+fn run_bb_shootout() {
+    use small_field_metal_ntt::field::babybear::BabyBear;
+    use small_field_metal_ntt::ntt::bb_cpu_reference::BbCpuReferenceBackend;
+    use small_field_metal_ntt::ntt::bb_metal_ct_dit_r2::BbMetalCtDitR2;
+    use small_field_metal_ntt::ntt::bb_metal_r2::BbMetalR2;
+    use small_field_metal_ntt::ntt::bb_metal_stockham_r2::BbMetalStockhamR2;
+    use small_field_metal_ntt::ntt::bb_metal_ct_gs_r4::BbMetalCtGsR4;
+
+    let dir = shader_dir();
+
+    if let Ok(ctx) = small_field_metal_ntt::gpu::MetalContext::new(&dir) {
+        let info = ctx.device_info();
+        eprintln!("GPU: {}", info);
+        eprintln!();
+    }
+
+    let cpu = BbCpuReferenceBackend::new();
+    let v1 = BbMetalCtDitR2::new(&dir).expect("Failed to init BB V1");
+    let v2 = BbMetalR2::new(&dir).expect("Failed to init BB V2");
+    let v3 = BbMetalStockhamR2::new(&dir).expect("Failed to init BB V3");
+    let v4 = BbMetalCtGsR4::new(&dir).expect("Failed to init BB V4");
+
+    println!("variant,size,median_us,min_us,max_us,stddev_us,p95_us,cv_pct,throughput_melem_s");
+
+    let mut all_results: Vec<BenchResult> = Vec::new();
+
+    for &size in SIZES {
+        let data: Vec<BabyBear> = {
+            let mut seed: u64 = 12345 + size as u64;
+            (0..size).map(|_| {
+                seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+                BabyBear::to_monty(((seed >> 33) as u32) % BabyBear::P)
+            }).collect()
+        };
+
+        eprintln!("BB Shootout: size 2^{} ({} elements)...", size.trailing_zeros(), size);
+
+        let r = bench_variant("bb-cpu-ref", &cpu, &data, size);
+        println!("{},{},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1}", r.variant, r.size, r.median_us, r.min_us, r.max_us, r.stddev_us, r.p95_us, r.cv_pct, r.throughput_melem_s);
+        all_results.push(r);
+
+        let r = bench_variant("bb-v1-ct-dit-r2", &v1, &data, size);
+        println!("{},{},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1}", r.variant, r.size, r.median_us, r.min_us, r.max_us, r.stddev_us, r.p95_us, r.cv_pct, r.throughput_melem_s);
+        all_results.push(r);
+
+        let r = bench_variant("bb-v2-ct-gs-r2", &v2, &data, size);
+        println!("{},{},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1}", r.variant, r.size, r.median_us, r.min_us, r.max_us, r.stddev_us, r.p95_us, r.cv_pct, r.throughput_melem_s);
+        all_results.push(r);
+
+        let r = bench_variant("bb-v3-stockham-r2", &v3, &data, size);
+        println!("{},{},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1}", r.variant, r.size, r.median_us, r.min_us, r.max_us, r.stddev_us, r.p95_us, r.cv_pct, r.throughput_melem_s);
+        all_results.push(r);
+
+        let r = bench_variant("bb-v4-ct-gs-r4", &v4, &data, size);
+        println!("{},{},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1}", r.variant, r.size, r.median_us, r.min_us, r.max_us, r.stddev_us, r.p95_us, r.cv_pct, r.throughput_melem_s);
+        all_results.push(r);
+    }
+
+    // Summary table
+    eprintln!();
+    eprintln!("╔═══════════════════════════════════════════════════════════════════════════════╗");
+    eprintln!("║                BabyBear NTT Algorithm Shootout (Montgomery)                   ║");
+    eprintln!("╠════════════════╦════════╦════════╦════════╦════════╦════════╦═════════════════╣");
+    eprintln!("║ Variant        ║ 2^10   ║ 2^12   ║ 2^14   ║ 2^16   ║ 2^18   ║ 2^20          ║");
+    eprintln!("║                ║ (us)   ║ (us)   ║ (us)   ║ (us)   ║ (us)   ║ (us)           ║");
+    eprintln!("╠════════════════╬════════╬════════╬════════╬════════╬════════╬═════════════════╣");
+
+    let variants = ["bb-cpu-ref", "bb-v1-ct-dit-r2", "bb-v2-ct-gs-r2", "bb-v3-stockham-r2", "bb-v4-ct-gs-r4"];
+    let labels = ["CPU ref      ", "V1 CT-DIT    ", "V2 CT-GS r2  ", "V3 Stockham  ", "V4 CT-GS r4  "];
+
+    for (vi, variant) in variants.iter().enumerate() {
+        let mut row = format!("║ {} ║", labels[vi]);
+        for &size in SIZES {
+            if let Some(r) = all_results.iter().find(|r| r.variant == *variant && r.size == size) {
+                row.push_str(&format!(" {:>6.0} ║", r.median_us));
+            } else {
+                row.push_str("    N/A ║");
+            }
+        }
+        eprintln!("{}", row);
+    }
+
+    eprintln!("╚════════════════╩════════╩════════╩════════╩════════╩════════╩═════════════════╝");
+
+    let largest = SIZES.last().unwrap();
+    let gpu_results: Vec<&BenchResult> = all_results
+        .iter()
+        .filter(|r| r.size == *largest && r.variant != "bb-cpu-ref")
+        .collect();
+    if let Some(winner) = gpu_results.iter().min_by(|a, b| a.median_us.partial_cmp(&b.median_us).unwrap()) {
+        eprintln!();
+        eprintln!("Winner at 2^{}: {} ({:.0} us, {:.1} Melem/s)",
+            largest.trailing_zeros(), winner.variant, winner.median_us, winner.throughput_melem_s);
+    }
+
+    eprintln!();
+    eprintln!("Config: {} warmup + {} iterations per (variant, size) pair", WARMUP, ITERATIONS);
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
 
@@ -499,6 +601,8 @@ fn main() {
         run_coset_lde_benchmark();
     } else if args.iter().any(|a| a == "--batch-ntt" || a == "--batch") {
         run_batch_ntt_benchmark();
+    } else if args.iter().any(|a| a == "--bb-shootout" || a == "--bb") {
+        run_bb_shootout();
     } else {
         run_algorithm_shootout();
     }
