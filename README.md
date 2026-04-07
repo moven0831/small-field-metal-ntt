@@ -49,12 +49,18 @@ Apple M3, optimized build. Forward NTT over BabyBear with Montgomery reduction.
 
 ### Batched Coset LDE (BabyBear)
 
-Full coset Low-Degree Extension pipeline: iDFT_batch -> zero_pad -> coset_shift -> forward_DFT_batch. Matches [zk-autoresearch](https://github.com/Barnadrot/zk-autoresearch) parameters for direct comparison.
+Full coset Low-Degree Extension pipeline: iDFT_batch -> zero_pad -> coset_shift -> forward_DFT_batch. Same-machine comparison against [Plonky3](https://github.com/Plonky3/Plonky3) `coset_lde_batch` (Radix2DitParallel, `--features parallel`, all cores).
 
-| Config | Metal GPU (M3) | zk-autoresearch (EPYC AVX512) | Speedup |
-|--------|---------------|-------------------------------|---------|
-| 2^20 x 256, 2x LDE | **1413 ms** | ~2699 ms | **1.9x** |
-| 2^20 x 256, 4x LDE | 2689 ms | — | — |
+| Config | Metal GPU (M3) | Plonky3 CPU (M3, Rayon) | GPU vs CPU |
+|--------|---------------|------------------------|------------|
+| 2^16 x 256, 2x LDE | **52 ms** | 69 ms | **1.3x faster** |
+| 2^18 x 256, 2x LDE | 236 ms | 237 ms | ~tied |
+| 2^20 x 256, 2x LDE | 1447 ms | **1177 ms** | 0.8x (CPU wins) |
+| 2^20 x 256, 4x LDE | 2764 ms | — | — |
+
+> Cross-machine ref: [zk-autoresearch](https://github.com/Barnadrot/zk-autoresearch) reports ~2699 ms on EPYC AVX512 for 2^20 x 256 (vs 1447 ms Metal GPU).
+
+At 2^20, Plonky3's Rayon-parallelized CPU implementation outperforms the GPU. The GPU wins at 2^16-2^18 where dispatch overhead is amortized but memory pressure is lower. This suggests the current GPU LDE pipeline is memory-bandwidth-bound at large sizes — the 2 GB output buffer (2^20 x 256 x 2x x 4 bytes) exceeds M3's L2 cache, and the multi-pass pipeline (4 separate kernel dispatches) doesn't fuse operations like Plonky3's CPU implementation can.
 
 Run with `cargo bench --bench ntt_benchmark -- --coset-lde`.
 
@@ -147,7 +153,7 @@ All GPU variants use a two-phase strategy:
 
 - [x] BabyBear GPU NTT: all 4 variants ported (V1-V4) with position-indexed twiddles (PR #19)
 - [x] Batched coset LDE: iDFT -> zero_pad -> coset_shift -> DFT on Metal GPU (PR #19)
-- [x] zk-autoresearch comparison: 1.9x faster than EPYC AVX512 at 2^20 x 256 (PR #19)
+- [x] Plonky3 same-machine comparison: GPU matches CPU at 2^18, CPU wins at 2^20 (PR #19)
 
 ### Next
 

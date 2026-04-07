@@ -320,7 +320,7 @@ fn run_cooperative_sweep() {
 }
 
 // ─── Coset LDE Benchmark ────────────────────────────────────────────────
-// Matches zk-autoresearch parameters: BabyBear field, 2^20 x 256 columns.
+// Matches Plonky3 coset_lde_batch parameters: BabyBear field, 2^20 x 256 columns, 2x expansion.
 
 fn run_coset_lde_benchmark() {
     use small_field_metal_ntt::field::babybear::BabyBear;
@@ -400,15 +400,15 @@ fn run_coset_lde_benchmark() {
     }
 
     eprintln!();
-    eprintln!("╔═══════════════════════════════════════════════════════════════╗");
-    eprintln!("║              Coset LDE Comparison                            ║");
-    eprintln!("╠═══════════════════════════════════════════════════════════════╣");
-    eprintln!("║ zk-autoresearch (EPYC AVX512, BabyBear):                    ║");
-    eprintln!("║   2^20 x 256, coset_lde_batch: ~2699 ms                     ║");
-    eprintln!("║                                                              ║");
-    eprintln!("║ This benchmark (Apple Metal GPU, BabyBear):                  ║");
-    eprintln!("║   See results above                                          ║");
-    eprintln!("╚═══════════════════════════════════════════════════════════════╝");
+    eprintln!("╔═══════════════════════════════════════════════════════════════════╗");
+    eprintln!("║              Coset LDE Comparison                                ║");
+    eprintln!("╠═══════════════════════════════════════════════════════════════════╣");
+    eprintln!("║ Plonky3 CPU (same M3, Radix2DitParallel, --features parallel):   ║");
+    eprintln!("║   2^16 x 256: ~69 ms | 2^18: ~237 ms | 2^20: ~1177 ms          ║");
+    eprintln!("║                                                                   ║");
+    eprintln!("║ This benchmark (Apple Metal GPU, BabyBear):                       ║");
+    eprintln!("║   See results above                                               ║");
+    eprintln!("╚═══════════════════════════════════════════════════════════════════╝");
     eprintln!();
     eprintln!("Config: {} warmup + {} iterations", WARMUP, ITERATIONS);
 }
