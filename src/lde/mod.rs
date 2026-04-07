@@ -8,12 +8,12 @@
 use crate::field::babybear::BabyBear;
 use crate::field::Field;
 use crate::gpu::MetalContext;
-use crate::ntt::bb_metal_r2::BbMetalR2;
+use crate::ntt::bb_metal_ct_gs_r4::BbMetalCtGsR4;
 use crate::ntt::NttError;
 use std::path::Path;
 
 pub struct CosetLdeBatch {
-    ntt: BbMetalR2,
+    ntt: BbMetalCtGsR4,
 }
 
 /// Result of a coset LDE execution.
@@ -26,7 +26,7 @@ pub struct LdeResult {
 
 impl CosetLdeBatch {
     pub fn new(shader_dir: &Path) -> Result<Self, NttError> {
-        let ntt = BbMetalR2::new(shader_dir)?;
+        let ntt = BbMetalCtGsR4::new(shader_dir)?;
         Ok(Self { ntt })
     }
 
@@ -58,6 +58,7 @@ impl CosetLdeBatch {
         // Precompute coset shift powers on CPU
         let shift = BabyBear::two_adic_generator(log_n_ext as u32 + 1);
         let shift_powers = compute_shift_powers(shift, n_ext);
+        let inv_n = BabyBear::reduce(n as u64).inv();
 
         // Allocate GPU buffers
         let buf_input = self.ntt.ctx().buffer_from_slice(input)?;
@@ -66,8 +67,8 @@ impl CosetLdeBatch {
         let cmd = self.ntt.ctx().begin_batch();
         let mut retain = Vec::new();
 
-        // Step 1: iDFT_batch (in-place on buf_input)
-        self.ntt.encode_inverse_ntt_batch(
+        // Step 1: iDFT_batch without normalize (in-place on buf_input)
+        self.ntt.encode_inverse_ntt_batch_no_normalize(
             cmd,
             &mut retain,
             &buf_input,
@@ -76,28 +77,20 @@ impl CosetLdeBatch {
             batch_size,
         )?;
 
-        // Step 2: Zero-pad from buf_input (n per col) to buf_output (n_ext per col)
-        self.ntt.encode_zero_pad(
+        // Step 2: Fused normalize + zero-pad + coset-shift (buf_input -> buf_output)
+        self.ntt.encode_fused_norm_zeropad_shift(
             cmd,
             &mut retain,
             &buf_input,
             &buf_output,
+            &shift_powers,
             n,
             n_ext,
             batch_size,
+            inv_n,
         )?;
 
-        // Step 3: Coset shift on buf_output
-        self.ntt.encode_coset_shift(
-            cmd,
-            &mut retain,
-            &buf_output,
-            &shift_powers,
-            n_ext,
-            batch_size,
-        )?;
-
-        // Step 4: Forward DFT_batch on buf_output (in-place, size n_ext)
+        // Step 3: Forward DFT_batch on buf_output (in-place, size n_ext)
         self.ntt.encode_forward_ntt_batch(
             cmd,
             &mut retain,

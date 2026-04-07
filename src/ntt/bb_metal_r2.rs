@@ -30,6 +30,7 @@ pub struct BbMetalR2 {
     // LDE helper pipelines
     zero_pad_pipeline: ComputePipelineState,
     coset_shift_pipeline: ComputePipelineState,
+    fused_norm_zeropad_shift_pipeline: ComputePipelineState,
     twiddle_cache: BbTwiddleCache,
 }
 
@@ -54,6 +55,7 @@ impl BbMetalR2 {
         // LDE helpers
         let zero_pad = ctx.make_pipeline("bb_zero_pad_batch")?;
         let coset_shift = ctx.make_pipeline("bb_coset_shift_batch")?;
+        let fused_norm_zeropad_shift = ctx.make_pipeline("bb_fused_normalize_zeropad_shift")?;
 
         Ok(Self {
             ctx,
@@ -69,6 +71,7 @@ impl BbMetalR2 {
             batch_normalize_pipeline: batch_normalize,
             zero_pad_pipeline: zero_pad,
             coset_shift_pipeline: coset_shift,
+            fused_norm_zeropad_shift_pipeline: fused_norm_zeropad_shift,
             twiddle_cache: BbTwiddleCache::new(),
         })
     }
@@ -441,6 +444,90 @@ impl BbMetalR2 {
             cmd,
             &self.coset_shift_pipeline,
             &[buf_data, &buf_shifts, &buf_p],
+            MTLSize::new(tg_x, batch_size as u64, 1),
+            MTLSize::new(tpg_x, 1, 1),
+        );
+        retain.push(buf_shifts);
+        retain.push(buf_p);
+        Ok(())
+    }
+
+    /// Encode batched inverse NTT without final normalize (for fused LDE pipeline).
+    pub fn encode_inverse_ntt_batch_no_normalize(
+        &self,
+        cmd: &CommandBufferRef,
+        retain: &mut Vec<Buffer>,
+        buf_data: &Buffer,
+        log_n: usize,
+        n: usize,
+        batch_size: usize,
+    ) -> Result<(), NttError> {
+        if log_n == 0 {
+            return Ok(());
+        }
+        let itwiddles = self.twiddle_cache.inverse(log_n as u32);
+        let tile_log = log_n.min(MAX_TILE_LOG);
+
+        if tile_log > 0 {
+            self.encode_batch_threadgroup_inverse(
+                cmd,
+                retain,
+                buf_data,
+                &itwiddles,
+                n,
+                tile_log,
+                batch_size,
+            )?;
+        }
+        for layer in tile_log..log_n {
+            self.encode_batch_butterfly(
+                cmd,
+                retain,
+                &self.batch_inverse_device_pipeline,
+                buf_data,
+                &itwiddles[layer],
+                1 << layer,
+                n,
+                batch_size,
+            )?;
+        }
+        // No normalize — caller will fuse it into the next step
+        Ok(())
+    }
+
+    /// Encode fused normalize + zero-pad + coset-shift dispatch.
+    /// Reads from buf_input (n_orig per col), writes to buf_output (n_ext per col).
+    pub fn encode_fused_norm_zeropad_shift(
+        &self,
+        cmd: &CommandBufferRef,
+        retain: &mut Vec<Buffer>,
+        buf_input: &Buffer,
+        buf_output: &Buffer,
+        shift_powers: &[u32],
+        n_orig: usize,
+        n_ext: usize,
+        batch_size: usize,
+        inv_n: BabyBear,
+    ) -> Result<(), NttError> {
+        let buf_shifts = self.ctx.buffer_from_slice(shift_powers)?;
+        let params: Vec<u32> = vec![
+            n_orig as u32,
+            n_ext as u32,
+            batch_size as u32,
+            inv_n.0,
+        ];
+        let buf_p = self.ctx.buffer_from_slice(&params)?;
+
+        let max_tpg =
+            MetalContext::max_threads_per_threadgroup(&self.fused_norm_zeropad_shift_pipeline)
+                as u64;
+        let tpg_x = max_tpg.min(n_ext as u64).max(1);
+        let tg_x = (n_ext as u64).div_ceil(tpg_x);
+
+        MetalContext::encode_dispatch(
+            cmd,
+            &self.fused_norm_zeropad_shift_pipeline,
+            &[buf_input, buf_output, &buf_shifts, &buf_p],
             MTLSize::new(tg_x, batch_size as u64, 1),
             MTLSize::new(tpg_x, 1, 1),
         );

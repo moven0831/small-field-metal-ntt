@@ -53,14 +53,12 @@ Full coset Low-Degree Extension pipeline: iDFT_batch -> zero_pad -> coset_shift 
 
 | Config | Metal GPU (M3) | Plonky3 CPU (M3, Rayon) | GPU vs CPU |
 |--------|---------------|------------------------|------------|
-| 2^16 x 256, 2x LDE | **52 ms** | 69 ms | **1.3x faster** |
-| 2^18 x 256, 2x LDE | 236 ms | 237 ms | ~tied |
-| 2^20 x 256, 2x LDE | 1447 ms | **1177 ms** | 0.8x (CPU wins) |
-| 2^20 x 256, 4x LDE | 2764 ms | — | — |
+| 2^16 x 256, 2x LDE | **36 ms** | 69 ms | **1.9x faster** |
+| 2^18 x 256, 2x LDE | **145 ms** | 237 ms | **1.6x faster** |
+| 2^20 x 256, 2x LDE | **819 ms** | 1177 ms | **1.4x faster** |
+| 2^20 x 256, 4x LDE | 1669 ms | — | — |
 
-> Cross-machine ref: [zk-autoresearch](https://github.com/Barnadrot/zk-autoresearch) reports ~2699 ms on EPYC AVX512 for 2^20 x 256 (vs 1447 ms Metal GPU).
-
-At 2^20, Plonky3's Rayon-parallelized CPU implementation outperforms the GPU. The GPU wins at 2^16-2^18 where dispatch overhead is amortized but memory pressure is lower. This suggests the current GPU LDE pipeline is memory-bandwidth-bound at large sizes — the 2 GB output buffer (2^20 x 256 x 2x x 4 bytes) exceeds M3's L2 cache, and the multi-pass pipeline (4 separate kernel dispatches) doesn't fuse operations like Plonky3's CPU implementation can.
+GPU beats Plonky3 CPU at all sizes. Two optimizations made the difference: (1) a fused kernel replaces 3 separate dispatches (normalize + zero-pad + coset-shift) with 1, and (2) switching from radix-2 to radix-4 batched NTT halves the device-memory dispatches (20 → 11 total). Combined: **1.76x faster** than the initial GPU pipeline at 2^20.
 
 Run with `cargo bench --bench ntt_benchmark -- --coset-lde`.
 
@@ -82,14 +80,14 @@ At prover-relevant sizes (2^18+), the U-curve appears: neither all-CPU nor all-G
 
 ### Key Takeaways
 
-1. **UMA changes the game.** On Apple Silicon, splitting NTT between CPU and GPU outperforms both pure approaches at prover-relevant sizes (2^18+). This is the first published evidence.
-2. **GPU wins at 2^18+.** V4 (radix-4) is 2.6x faster than CPU at 2^20. The crossover is around 2^18 where GPU dispatch overhead is amortized.
-3. **Radix-4 wins** the GPU-only shootout. Half the barriers = ~8% speedup over radix-2 at 2^20.
-4. **CPU dominates at small sizes.** GPU dispatch overhead (~200us) makes pure GPU slower than CPU below 2^16.
-5. **The split point is size-dependent.** At 2^18, CPU does 6 layers. At 2^20, CPU does 7. The crossover shifts as memory pressure increases.
-6. **Montgomery fields shift the ranking.** BabyBear's Montgomery multiply costs ~3x M31's Mersenne reduction on GPU. This narrows radix-4's advantage (from 8% to ~2% at 2^20) and makes V2/V4 nearly tied at large sizes.
-7. **Stockham's 2x memory hurts on UMA.** V3 is ~51% slower than V2 at 2^20. Out-of-place + 2x memory pressure doesn't help.
-8. **Twiddle generation dominates naive benchmarks.** Without caching, twiddle gen (79ms at 2^20) dwarfs both CPU butterfly (6.4ms) and GPU dispatch (2.5ms) time. Previous results were artifacts of twiddle overhead.
+1. **GPU beats CPU for full LDE at all sizes.** After fusing kernel dispatches and switching to radix-4 batched NTT, Metal GPU is 1.4x-1.9x faster than Plonky3 CPU (Rayon) for the coset LDE pipeline that dominates real ZK prover workloads.
+2. **Kernel fusion matters more than raw compute.** Reducing 20 dispatches to 11 (fused normalize+zeropad+shift, batched radix-4) yielded a 1.76x pipeline speedup — larger than any single algorithm improvement.
+3. **UMA changes the game.** On Apple Silicon, splitting NTT between CPU and GPU outperforms both pure approaches at prover-relevant sizes (2^18+). This is the first published evidence.
+4. **GPU wins at 2^18+.** V4 (radix-4) is 2.6x faster than CPU at 2^20 for single NTT. The crossover is around 2^18 where GPU dispatch overhead is amortized.
+5. **Radix-4 wins** the GPU-only shootout. Half the barriers = ~8% speedup over radix-2 at 2^20.
+6. **CPU dominates at small sizes.** GPU dispatch overhead (~200us) makes pure GPU slower than CPU below 2^16.
+7. **Montgomery fields shift the ranking.** BabyBear's Montgomery multiply costs ~3x M31's Mersenne reduction on GPU. This narrows radix-4's advantage (from 8% to ~2% at 2^20) and makes V2/V4 nearly tied at large sizes.
+8. **Twiddle generation dominates naive benchmarks.** Without caching, twiddle gen (79ms at 2^20) dwarfs both CPU butterfly (6.4ms) and GPU dispatch (2.5ms) time.
 
 ## Why This Matters
 
@@ -128,8 +126,8 @@ trait NttBackend<F: Field>
   +-- BbMetalStockhamR2     (V3: out-of-place, forward + inverse)
   +-- BbMetalCtGsR4         (V4: radix-4, forward + inverse)
   |
-  LDE Pipeline:
-  +-- CosetLdeBatch         (iDFT -> zero_pad -> coset_shift -> DFT)
+  LDE Pipeline (radix-4 + fused kernels):
+  +-- CosetLdeBatch         (iDFT -> fused[normalize+zero_pad+coset_shift] -> DFT)
 ```
 
 All GPU variants use a two-phase strategy:
@@ -153,7 +151,7 @@ All GPU variants use a two-phase strategy:
 
 - [x] BabyBear GPU NTT: all 4 variants ported (V1-V4) with position-indexed twiddles (PR #19)
 - [x] Batched coset LDE: iDFT -> zero_pad -> coset_shift -> DFT on Metal GPU (PR #19)
-- [x] Plonky3 same-machine comparison: GPU matches CPU at 2^18, CPU wins at 2^20 (PR #19)
+- [x] Optimized LDE: fused kernel + batched radix-4, GPU 1.4x faster than Plonky3 CPU at 2^20 (PR #19)
 
 ### Next
 
