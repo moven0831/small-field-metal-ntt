@@ -458,7 +458,7 @@ fn read_shader_source(shader_dir: &Path) -> Result<String, NttError> {
     let headers = &["m31_field.metal", "ntt_common.metal"];
     let kernels = &[
         "babybear_field.metal",
-        "bb_ntt_r2.metal",
+        "bb_ntt.metal",
         "ntt_ct_dit_r2.metal",
         "ntt_ct_gs_r2.metal",
         "ntt_ct_gs_r4.metal",
