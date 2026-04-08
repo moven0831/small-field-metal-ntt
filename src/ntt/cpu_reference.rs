@@ -27,6 +27,12 @@ pub struct CpuReferenceBackend {
     twiddle_cache: TwiddleCache,
 }
 
+impl Default for CpuReferenceBackend {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CpuReferenceBackend {
     pub fn new() -> Self {
         Self {
@@ -40,6 +46,7 @@ impl NttBackend<M31> for CpuReferenceBackend {
         "cpu-reference"
     }
 
+    #[allow(clippy::needless_range_loop)]
     fn forward_ntt(&self, data: &mut [M31], _twiddles: &[M31]) -> Result<(), NttError> {
         let n = data.len();
         if n == 0 || (n & (n - 1)) != 0 {
@@ -71,6 +78,7 @@ impl NttBackend<M31> for CpuReferenceBackend {
         Ok(())
     }
 
+    #[allow(clippy::needless_range_loop)]
     fn inverse_ntt(&self, data: &mut [M31], _twiddles: &[M31]) -> Result<(), NttError> {
         let n = data.len();
         if n == 0 || (n & (n - 1)) != 0 {

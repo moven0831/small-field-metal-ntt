@@ -82,6 +82,7 @@ impl CooperativeNttContext {
 ///   GPU does layers (log_n-S-1) down to 0
 ///
 /// Returns timing breakdown (CPU phase, GPU phase, total).
+#[allow(clippy::needless_range_loop)]
 pub fn cooperative_forward_ntt(
     coop: &CooperativeNttContext,
     input: &[u32],

@@ -33,12 +33,13 @@ pub struct BbMetalCtGsR4 {
     batch_r4_device_inv_pipeline: ComputePipelineState,
     batch_r2_device_pipeline: ComputePipelineState,
     batch_r2_device_inv_pipeline: ComputePipelineState,
-    batch_normalize_pipeline: ComputePipelineState,
+    _batch_normalize_pipeline: ComputePipelineState,
     // LDE helper pipelines
     fused_norm_zeropad_shift_pipeline: ComputePipelineState,
     twiddle_cache: BbTwiddleCache,
 }
 
+#[allow(clippy::too_many_arguments)]
 impl BbMetalCtGsR4 {
     pub fn new(shader_dir: &Path) -> Result<Self, NttError> {
         let ctx = MetalContext::new(shader_dir)?;
@@ -77,7 +78,7 @@ impl BbMetalCtGsR4 {
             batch_r4_device_inv_pipeline: batch_r4_dev_inv,
             batch_r2_device_pipeline: batch_r2_dev,
             batch_r2_device_inv_pipeline: batch_r2_dev_inv,
-            batch_normalize_pipeline: batch_normalize,
+            _batch_normalize_pipeline: batch_normalize,
             fused_norm_zeropad_shift_pipeline: fused_norm_zeropad_shift,
             twiddle_cache: BbTwiddleCache::new(),
         })

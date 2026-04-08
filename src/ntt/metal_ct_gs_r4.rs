@@ -33,6 +33,7 @@ pub struct MetalCtGsR4 {
     twiddle_cache: TwiddleCache,
 }
 
+#[allow(clippy::too_many_arguments)]
 impl MetalCtGsR4 {
     pub fn new(shader_dir: &Path) -> Result<Self, NttError> {
         let ctx = MetalContext::new(shader_dir)?;

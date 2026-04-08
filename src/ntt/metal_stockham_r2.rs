@@ -80,7 +80,7 @@ impl MetalStockhamR2 {
 
         // Allocate two device buffers for ping-pong
         let buf_a = self.ctx.buffer_from_slice(input)?;
-        let buf_b = self.ctx.alloc_buffer(n * std::mem::size_of::<u32>())?;
+        let buf_b = self.ctx.alloc_buffer(std::mem::size_of_val(input))?;
         let cmd = self.ctx.begin_batch();
         let mut retain = Vec::new();
 
@@ -105,7 +105,7 @@ impl MetalStockhamR2 {
             let params: Vec<u32> = vec![stride as u32, n as u32];
             let buf_p = self.ctx.buffer_from_slice(&params)?;
 
-            let tg = MTLSize::new((num_butterflies + tpg_width - 1) / tpg_width, 1, 1);
+            let tg = MTLSize::new(num_butterflies.div_ceil(tpg_width), 1, 1);
             let tpg = MTLSize::new(tpg_width.min(num_butterflies), 1, 1);
 
             let (cur_in, cur_out) = if read_from_a {
@@ -204,7 +204,7 @@ impl MetalStockhamR2 {
 
         // Allocate two device buffers for ping-pong
         let buf_a = self.ctx.buffer_from_slice(input)?;
-        let buf_b = self.ctx.alloc_buffer(n * std::mem::size_of::<u32>())?;
+        let buf_b = self.ctx.alloc_buffer(std::mem::size_of_val(input))?;
         let cmd = self.ctx.begin_batch();
         let mut retain = Vec::new();
 
@@ -277,7 +277,7 @@ impl MetalStockhamR2 {
             let params: Vec<u32> = vec![stride as u32, n as u32];
             let buf_p = self.ctx.buffer_from_slice(&params)?;
 
-            let tg = MTLSize::new((num_butterflies + tpg_width - 1) / tpg_width, 1, 1);
+            let tg = MTLSize::new(num_butterflies.div_ceil(tpg_width), 1, 1);
             let tpg = MTLSize::new(tpg_width.min(num_butterflies), 1, 1);
 
             let (cur_in, cur_out) = if read_from_a {
