@@ -124,7 +124,7 @@ trait NttBackend<F: Field>
   +-- BbMetalCtDitR2        (V1: naive baseline, forward only)
   +-- BbMetalR2             (V2: in-place, forward + inverse + batch)
   +-- BbMetalStockhamR2     (V3: out-of-place, forward + inverse)
-  +-- BbMetalCtGsR4         (V4: radix-4, forward + inverse)
+  +-- BbMetalCtGsR4         (V4: radix-4, forward + inverse + batch)
   |
   LDE Pipeline (radix-4 + fused kernels):
   +-- CosetLdeBatch         (iDFT -> fused[normalize+zero_pad+coset_shift] -> DFT)

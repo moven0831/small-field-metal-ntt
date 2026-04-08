@@ -3,7 +3,7 @@
 //! One dispatch per butterfly stage, all device memory, no threadgroup optimization.
 //! Forward only. Purpose: baseline cost of GPU NTT with zero optimization.
 //!
-//! Reuses the `bb_r2_butterfly_device` kernel from bb_ntt_r2.metal (same butterfly
+//! Reuses the `bb_r2_butterfly_device` kernel from bb_ntt.metal (same butterfly
 //! structure, same position-indexed twiddles).
 
 use crate::field::babybear::BabyBear;
