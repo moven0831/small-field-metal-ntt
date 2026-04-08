@@ -46,7 +46,7 @@ impl BbMetalCtDitR2 {
         let cmd = self.ctx.begin_batch();
         let mut retain = Vec::new();
 
-        // One dispatch per layer, high to low (CT-DIT order)
+        // One dispatch per layer, high to low (GS-DIF order)
         for layer in (0..log_n).rev() {
             let stride = 1usize << layer;
             let tw_data: Vec<u32> = twiddles[layer].iter().map(|m| m.0).collect();
