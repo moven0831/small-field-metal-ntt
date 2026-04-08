@@ -27,17 +27,6 @@ pub trait R2ShaderConfig: 'static {
     fn make_twiddle_cache() -> TwiddleCache<Self::F>;
 }
 
-/// Extension for backends that support batched NTT (e.g., BabyBear for Plonky3 LDE).
-///
-/// M31 does not implement this because Circle NTT batch shaders don't exist yet.
-pub trait BatchR2ShaderConfig: R2ShaderConfig {
-    const BATCH_FORWARD_TG: &'static str;
-    const BATCH_INVERSE_TG: &'static str;
-    const BATCH_FORWARD_DEVICE: &'static str;
-    const BATCH_INVERSE_DEVICE: &'static str;
-    const BATCH_NORMALIZE: &'static str;
-}
-
 // ── M31 Configuration ──────────────────────────────────────────────────
 
 pub struct M31R2Config;
@@ -72,12 +61,4 @@ impl R2ShaderConfig for BbR2Config {
     fn make_twiddle_cache() -> TwiddleCache<Self::F> {
         crate::ntt::babybear::twiddles::new_bb_twiddle_cache()
     }
-}
-
-impl BatchR2ShaderConfig for BbR2Config {
-    const BATCH_FORWARD_TG: &'static str = "bb_r2_batch_forward_tg";
-    const BATCH_INVERSE_TG: &'static str = "bb_r2_batch_inverse_tg";
-    const BATCH_FORWARD_DEVICE: &'static str = "bb_r2_batch_butterfly_device";
-    const BATCH_INVERSE_DEVICE: &'static str = "bb_r2_batch_butterfly_device_inv";
-    const BATCH_NORMALIZE: &'static str = "bb_r2_batch_normalize";
 }
