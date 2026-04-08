@@ -14,9 +14,12 @@ objc = "0.2"
 block = "0.1"
 
 [dev-dependencies]
-# stwo-prover for cross-validation of Circle NTT correctness
+# stwo-prover requires nightly Rust — cross-validate via hardcoded test vectors instead
 # stwo-prover = { git = "https://github.com/starkware-libs/stwo.git" }
 rand = "0.8"
+p3-baby-bear = "0.5.2"
+p3-dft = "0.5.2"
+p3-field = "0.5.2"
 
 [[bench]]
 name = "ntt_benchmark"
