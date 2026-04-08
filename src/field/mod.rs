@@ -33,4 +33,16 @@ pub trait Field: Copy + Clone + PartialEq + Eq + std::fmt::Debug {
 
     /// Modular inverse via Fermat's little theorem: a^(p-2) mod p
     fn inv(self) -> Self;
+
+    /// Extract the raw internal u32 representation for GPU buffer serialization.
+    ///
+    /// For M31, this is the standard value. For BabyBear, this is the Montgomery-encoded value.
+    /// Use `from_raw` to reconstruct from GPU buffer readback.
+    fn raw(self) -> u32;
+
+    /// Construct a field element from its raw internal u32 representation.
+    ///
+    /// The value must already be in the field's internal form (Montgomery for BabyBear,
+    /// standard for M31). This is the inverse of `raw()`: `F::from_raw(f.raw()) == f`.
+    fn from_raw(val: u32) -> Self;
 }
