@@ -1,0 +1,55 @@
+name: Benchmark
+
+on:
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  bench:
+    name: Benchmark Smoke Test
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Run M31 shootout benchmark
+        run: cargo bench 2>bench_stderr.txt | tee bench_output.csv
+
+      - name: Run BabyBear shootout benchmark
+        run: cargo bench -- --bb-shootout 2>bb_bench_stderr.txt | tee -a bench_output.csv
+
+      - name: Check CV% < 15%
+        run: |
+          # Parse CSV output and check coefficient of variation
+          # CSV columns: variant,size,median_us,min_us,max_us,stddev_us,p95_us,cv_pct,throughput_melem_s
+          FAILED=0
+          while IFS=, read -r variant size median min max stddev p95 cv throughput; do
+            # Skip header line
+            [ "$variant" = "variant" ] && continue
+            # Check if cv_pct exceeds threshold
+            if [ -n "$cv" ] && echo "$cv" | grep -qE '^[0-9]'; then
+              EXCEEDS=$(echo "$cv > 15.0" | bc -l 2>/dev/null || echo "0")
+              if [ "$EXCEEDS" = "1" ]; then
+                echo "WARNING: $variant at size $size has CV=${cv}% (threshold: 15%)"
+                FAILED=1
+              fi
+            fi
+          done < bench_output.csv
+          if [ "$FAILED" = "1" ]; then
+            echo "::warning::Some benchmarks have CV% > 15%. Results may not be trustworthy."
+          fi
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: |
+            bench_output.csv
+            bench_stderr.txt
+            bb_bench_stderr.txt
