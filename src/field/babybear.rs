@@ -159,6 +159,16 @@ impl Field for BabyBear {
         }
         result
     }
+
+    #[inline(always)]
+    fn raw(self) -> u32 {
+        self.0
+    }
+
+    #[inline(always)]
+    fn from_raw(val: u32) -> Self {
+        BabyBear(val)
+    }
 }
 
 #[cfg(test)]

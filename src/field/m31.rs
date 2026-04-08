@@ -81,6 +81,16 @@ impl Field for M31 {
         }
         result
     }
+
+    #[inline(always)]
+    fn raw(self) -> u32 {
+        self.0
+    }
+
+    #[inline(always)]
+    fn from_raw(val: u32) -> Self {
+        M31(val)
+    }
 }
 
 #[cfg(test)]

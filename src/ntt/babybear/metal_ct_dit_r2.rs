@@ -9,7 +9,7 @@
 use crate::field::babybear::BabyBear;
 use crate::field::Field;
 use crate::gpu::MetalContext;
-use crate::ntt::bb_twiddles::BbTwiddleCache;
+use crate::ntt::babybear::twiddles::BbTwiddleCache;
 use crate::ntt::{NttBackend, NttError};
 use metal::*;
 use std::path::Path;
@@ -28,7 +28,7 @@ impl BbMetalCtDitR2 {
         Ok(Self {
             ctx,
             butterfly_pipeline,
-            twiddle_cache: BbTwiddleCache::new(),
+            twiddle_cache: crate::ntt::babybear::twiddles::new_bb_twiddle_cache(),
         })
     }
 
@@ -125,7 +125,7 @@ impl NttBackend<BabyBear> for BbMetalCtDitR2 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ntt::bb_cpu_reference::BbCpuReferenceBackend;
+    use crate::ntt::babybear::cpu_reference::BbCpuReferenceBackend;
     use crate::ntt::test_utils::shader_dir;
 
     fn init() -> Option<BbMetalCtDitR2> {

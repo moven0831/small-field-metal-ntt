@@ -17,7 +17,7 @@
 #ifndef NTT_STOCKHAM_R2_H
 #define NTT_STOCKHAM_R2_H
 
-#include "m31_field.metal"
+#include "../fields/m31_field.metal"
 
 // Tile size for ping-pong: 4096 elements per array x 4 bytes = 16 KB each.
 // Two arrays (tile_a + tile_b) = 32 KB total (Apple Silicon threadgroup budget).

@@ -9,8 +9,8 @@ use p3_field::PrimeField32;
 use small_field_metal_ntt::field::babybear::BabyBear;
 use small_field_metal_ntt::field::m31::M31;
 use small_field_metal_ntt::field::Field;
-use small_field_metal_ntt::ntt::bb_cpu_reference::BbCpuReferenceBackend;
-use small_field_metal_ntt::ntt::cpu_reference::CpuReferenceBackend;
+use small_field_metal_ntt::ntt::babybear::cpu_reference::BbCpuReferenceBackend;
+use small_field_metal_ntt::ntt::m31::cpu_reference::CpuReferenceBackend;
 use small_field_metal_ntt::ntt::NttBackend;
 
 // ─── Plonky3 cross-validation (BabyBear) ───────────────────────────────────
@@ -186,10 +186,10 @@ fn test_bb_inverse_ntt_matches_plonky3() {
 #[cfg(test)]
 mod bb_gpu_plonky3 {
     use super::*;
-    use small_field_metal_ntt::ntt::bb_metal_ct_dit_r2::BbMetalCtDitR2;
-    use small_field_metal_ntt::ntt::bb_metal_ct_gs_r4::BbMetalCtGsR4;
-    use small_field_metal_ntt::ntt::bb_metal_r2::BbMetalR2;
-    use small_field_metal_ntt::ntt::bb_metal_stockham_r2::BbMetalStockhamR2;
+    use small_field_metal_ntt::ntt::babybear::batch::BbBatchNtt;
+    use small_field_metal_ntt::ntt::babybear::metal_ct_dit_r2::BbMetalCtDitR2;
+    use small_field_metal_ntt::ntt::babybear::metal_ct_gs_r4::BbMetalCtGsR4;
+    use small_field_metal_ntt::ntt::babybear::metal_stockham_r2::BbMetalStockhamR2;
     use std::path::PathBuf;
 
     fn shader_dir() -> PathBuf {
@@ -252,7 +252,7 @@ mod bb_gpu_plonky3 {
 
     #[test]
     fn test_bb_v2_matches_plonky3() {
-        let gpu = match try_init(BbMetalR2::new) {
+        let gpu = match try_init(BbBatchNtt::new) {
             Some(g) => g,
             None => return,
         };
@@ -380,11 +380,11 @@ fn test_m31_circle_ntt_zero_polynomial() {
 #[cfg(test)]
 mod m31_gpu_cross_validation {
     use super::*;
-    use small_field_metal_ntt::ntt::cpu_reference::CpuReferenceBackend;
-    use small_field_metal_ntt::ntt::metal_ct_dit_r2::MetalCtDitR2;
-    use small_field_metal_ntt::ntt::metal_ct_gs_r2::MetalCtGsR2;
-    use small_field_metal_ntt::ntt::metal_ct_gs_r4::MetalCtGsR4;
-    use small_field_metal_ntt::ntt::metal_stockham_r2::MetalStockhamR2;
+    use small_field_metal_ntt::ntt::m31::cpu_reference::CpuReferenceBackend;
+    use small_field_metal_ntt::ntt::m31::metal_ct_dit_r2::MetalCtDitR2;
+    use small_field_metal_ntt::ntt::m31::metal_ct_gs_r4::MetalCtGsR4;
+    use small_field_metal_ntt::ntt::m31::metal_stockham_r2::MetalStockhamR2;
+    use small_field_metal_ntt::ntt::metal_r2::MetalCtGsR2;
     use std::path::PathBuf;
 
     fn shader_dir() -> PathBuf {

@@ -1,64 +1,71 @@
-//! Variant 2: CT-DIT/GS-DIF radix-2 NTT on Metal GPU — in-place with threadgroup memory.
+//! Generic radix-2 in-place NTT on Metal GPU (CT-DIT forward / GS-DIF inverse).
+//!
+//! Parameterized by `R2ShaderConfig` to support multiple fields (M31, BabyBear)
+//! with identical dispatch logic but field-specific shader kernels.
 //!
 //! Two-phase execution:
-//! - Threadgroup phase: Layers with stride ≤ tile_size/2 are processed entirely
-//!   in on-chip threadgroup memory. One dispatch covers all small-stride layers.
-//!   Cost: 1 device read + 1 device write + N on-chip barriers.
-//! - Device-memory phase: Large-stride layers (stride > tile_size/2), one
-//!   dispatch per layer.
-//!
-//! Key advantages over Variant 1:
-//! - Threadgroup phase eliminates most device-memory round-trips
-//! - NO bit-reversal permutation between forward and inverse
-//!   (forward produces bit-reversed output; inverse expects it)
-//!
-//! Total dispatches for 2^20 NTT: 1 (threadgroup, 13 stages) + 7 (device) = 8
-//! vs Variant 1's 20 dispatches (all device memory).
+//! - Threadgroup phase: Layers with stride <= tile_size/2 in on-chip memory.
+//! - Device-memory phase: Large-stride layers, one dispatch per layer.
 
-use crate::field::m31::M31;
 use crate::field::Field;
 use crate::gpu::MetalContext;
-use crate::ntt::twiddles::TwiddleCache;
+use crate::ntt::shader_config::R2ShaderConfig;
+use crate::ntt::twiddle_cache::TwiddleCache;
 use crate::ntt::{NttBackend, NttError};
 use metal::*;
+use std::marker::PhantomData;
 use std::path::Path;
 
 /// Maximum elements per threadgroup tile: 8192 (= 32 KB of threadgroup memory).
-/// Handles up to 13 butterfly stages on-chip.
 const MAX_TILE_LOG: usize = 13;
 
-pub struct MetalCtGsR2 {
+/// Generic radix-2 Metal NTT backend.
+///
+/// Type aliases for specific fields:
+/// - `MetalCtGsR2` = `MetalR2<M31R2Config>` (M31 Circle NTT)
+/// - `BbMetalR2` = `MetalR2<BbR2Config>` (BabyBear single-column NTT)
+pub struct MetalR2<C: R2ShaderConfig> {
     ctx: MetalContext,
     forward_tg_pipeline: ComputePipelineState,
     inverse_tg_pipeline: ComputePipelineState,
     forward_device_pipeline: ComputePipelineState,
     inverse_device_pipeline: ComputePipelineState,
     normalize_pipeline: ComputePipelineState,
-    twiddle_cache: TwiddleCache,
+    twiddle_cache: TwiddleCache<C::F>,
+    _phantom: PhantomData<C>,
 }
 
-impl MetalCtGsR2 {
+impl<C: R2ShaderConfig> MetalR2<C> {
     pub fn new(shader_dir: &Path) -> Result<Self, NttError> {
         let ctx = MetalContext::new(shader_dir)?;
-        let forward_tg = ctx.make_pipeline("ct_gs_r2_forward_tg")?;
-        let inverse_tg = ctx.make_pipeline("ct_gs_r2_inverse_tg")?;
-        let forward_dev = ctx.make_pipeline("ct_gs_r2_butterfly_device")?;
-        let inverse_dev = ctx.make_pipeline("ct_gs_r2_butterfly_device_inv")?;
-        let normalize = ctx.make_pipeline("ct_gs_r2_normalize")?;
+        let forward_tg = ctx.make_pipeline(C::FORWARD_TG)?;
+        let inverse_tg = ctx.make_pipeline(C::INVERSE_TG)?;
+        let forward_dev = ctx.make_pipeline(C::FORWARD_DEVICE)?;
+        let inverse_dev = ctx.make_pipeline(C::INVERSE_DEVICE)?;
+        let normalize = ctx.make_pipeline(C::NORMALIZE)?;
 
-        Ok(MetalCtGsR2 {
+        Ok(Self {
             ctx,
             forward_tg_pipeline: forward_tg,
             inverse_tg_pipeline: inverse_tg,
             forward_device_pipeline: forward_dev,
             inverse_device_pipeline: inverse_dev,
             normalize_pipeline: normalize,
-            twiddle_cache: TwiddleCache::new(),
+            twiddle_cache: C::make_twiddle_cache(),
+            _phantom: PhantomData,
         })
     }
 
-    /// Run forward Circle NTT (CT-DIT) on GPU.
-    /// Returns (result_data, total_gpu_time_ns).
+    pub fn ctx(&self) -> &MetalContext {
+        &self.ctx
+    }
+
+    /// Access the twiddle cache (for batch wrappers that share twiddles).
+    pub fn twiddle_cache(&self) -> &TwiddleCache<C::F> {
+        &self.twiddle_cache
+    }
+
+    /// Run forward NTT on GPU. Returns (result_data, total_gpu_time_ns).
     pub fn forward_ntt_gpu(
         &self,
         input: &[u32],
@@ -76,15 +83,13 @@ impl MetalCtGsR2 {
         }
 
         let twiddles = self.twiddle_cache.forward(log_n as u32);
-
         let buf_data = self.ctx.buffer_from_slice(input)?;
         let cmd = self.ctx.begin_batch();
         let mut retain = Vec::new();
 
         let tile_log = log_n.min(MAX_TILE_LOG);
 
-        // ── Phase 1: device-memory stages (large strides) ──────────────
-        // Forward: layers from (log_n-1) down to tile_log
+        // Device-memory stages (large strides): layers (log_n-1) down to tile_log
         for layer in (tile_log..log_n).rev() {
             let stride = 1usize << layer;
             self.ctx.encode_butterfly_r2(
@@ -98,8 +103,7 @@ impl MetalCtGsR2 {
             )?;
         }
 
-        // ── Phase 2: threadgroup stages (small strides) ────────────────
-        // Forward: layers from (tile_log-1) down to 0
+        // Threadgroup stages (small strides): layers (tile_log-1) down to 0
         if tile_log > 0 {
             self.encode_threadgroup_forward(cmd, &mut retain, &buf_data, &twiddles, n, tile_log)?;
         }
@@ -109,8 +113,7 @@ impl MetalCtGsR2 {
         Ok((result, total_ns))
     }
 
-    /// Run inverse Circle NTT (GS-DIF) on GPU.
-    /// Returns (result_data, total_gpu_time_ns).
+    /// Run inverse NTT on GPU. Returns (result_data, total_gpu_time_ns).
     pub fn inverse_ntt_gpu(
         &self,
         input: &[u32],
@@ -128,21 +131,18 @@ impl MetalCtGsR2 {
         }
 
         let itwiddles = self.twiddle_cache.inverse(log_n as u32);
-
         let buf_data = self.ctx.buffer_from_slice(input)?;
         let cmd = self.ctx.begin_batch();
         let mut retain = Vec::new();
 
         let tile_log = log_n.min(MAX_TILE_LOG);
 
-        // ── Phase 1: threadgroup stages (small strides) ────────────────
-        // Inverse: layers from 0 up to (tile_log-1)
+        // Threadgroup stages: layers 0 up to (tile_log-1)
         if tile_log > 0 {
             self.encode_threadgroup_inverse(cmd, &mut retain, &buf_data, &itwiddles, n, tile_log)?;
         }
 
-        // ── Phase 2: device-memory stages (large strides) ──────────────
-        // Inverse: layers from tile_log up to (log_n-1)
+        // Device-memory stages: layers tile_log up to (log_n-1)
         for layer in tile_log..log_n {
             let stride = 1usize << layer;
             self.ctx.encode_butterfly_r2(
@@ -156,8 +156,8 @@ impl MetalCtGsR2 {
             )?;
         }
 
-        // ── Normalize: multiply all elements by inv_n ──────────────────
-        let inv_n = M31::reduce(n as u64).inv();
+        // Normalize: multiply all elements by inv_n
+        let inv_n = C::F::reduce(n as u64).inv();
         self.ctx.encode_normalize(
             cmd,
             &mut retain,
@@ -178,24 +178,22 @@ impl MetalCtGsR2 {
         cmd: &CommandBufferRef,
         retain: &mut Vec<Buffer>,
         buf_data: &Buffer,
-        twiddles: &[Vec<M31>],
+        twiddles: &[Vec<C::F>],
         n: usize,
         tile_log: usize,
     ) -> Result<(), NttError> {
         let num_tg_layers = tile_log;
         let start_layer = tile_log - 1;
 
-        // Flatten twiddles for all threadgroup layers (processing order: high to low)
         let mut flat_tw = Vec::new();
         let mut tw_offsets = Vec::new();
         for li in 0..num_tg_layers {
             let layer = start_layer - li;
             tw_offsets.push(flat_tw.len() as u32);
-            flat_tw.extend(twiddles[layer].iter().map(|m| m.0));
+            flat_tw.extend(twiddles[layer].iter().map(|f| f.raw()));
         }
         let buf_tw = self.ctx.buffer_from_slice(&flat_tw)?;
 
-        // params: [n, tile_log, num_layers, start_layer, offsets...]
         let mut params: Vec<u32> = vec![
             n as u32,
             tile_log as u32,
@@ -232,20 +230,19 @@ impl MetalCtGsR2 {
         cmd: &CommandBufferRef,
         retain: &mut Vec<Buffer>,
         buf_data: &Buffer,
-        itwiddles: &[Vec<M31>],
+        itwiddles: &[Vec<C::F>],
         n: usize,
         tile_log: usize,
     ) -> Result<(), NttError> {
         let num_tg_layers = tile_log;
         let start_layer = 0;
 
-        // Flatten inverse twiddles (processing order: low to high)
         let mut flat_tw = Vec::new();
         let mut tw_offsets = Vec::new();
         for li in 0..num_tg_layers {
             let layer = start_layer + li;
             tw_offsets.push(flat_tw.len() as u32);
-            flat_tw.extend(itwiddles[layer].iter().map(|m| m.0));
+            flat_tw.extend(itwiddles[layer].iter().map(|f| f.raw()));
         }
         let buf_tw = self.ctx.buffer_from_slice(&flat_tw)?;
 
@@ -280,12 +277,14 @@ impl MetalCtGsR2 {
     }
 }
 
-impl NttBackend<M31> for MetalCtGsR2 {
+// ── NttBackend trait implementation ─────────────────────────────────────
+
+impl<C: R2ShaderConfig> NttBackend<C::F> for MetalR2<C> {
     fn name(&self) -> &str {
-        "metal-ct-gs-r2"
+        C::NAME
     }
 
-    fn forward_ntt(&self, data: &mut [M31], _twiddles: &[M31]) -> Result<(), NttError> {
+    fn forward_ntt(&self, data: &mut [C::F], _twiddles: &[C::F]) -> Result<(), NttError> {
         let n = data.len();
         if n == 0 || (n & (n - 1)) != 0 {
             return Err(NttError::InvalidSize(n));
@@ -295,15 +294,15 @@ impl NttBackend<M31> for MetalCtGsR2 {
         }
         let log_n = n.trailing_zeros() as usize;
 
-        let input: Vec<u32> = data.iter().map(|m| m.0).collect();
+        let input: Vec<u32> = data.iter().map(|f| f.raw()).collect();
         let (result, _) = self.forward_ntt_gpu(&input, log_n)?;
         for (i, val) in result.iter().enumerate() {
-            data[i] = M31(*val);
+            data[i] = C::F::from_raw(*val);
         }
         Ok(())
     }
 
-    fn inverse_ntt(&self, data: &mut [M31], _twiddles: &[M31]) -> Result<(), NttError> {
+    fn inverse_ntt(&self, data: &mut [C::F], _twiddles: &[C::F]) -> Result<(), NttError> {
         let n = data.len();
         if n == 0 || (n & (n - 1)) != 0 {
             return Err(NttError::InvalidSize(n));
@@ -313,15 +312,15 @@ impl NttBackend<M31> for MetalCtGsR2 {
         }
         let log_n = n.trailing_zeros() as usize;
 
-        let input: Vec<u32> = data.iter().map(|m| m.0).collect();
+        let input: Vec<u32> = data.iter().map(|f| f.raw()).collect();
         let (result, _) = self.inverse_ntt_gpu(&input, log_n)?;
         for (i, val) in result.iter().enumerate() {
-            data[i] = M31(*val);
+            data[i] = C::F::from_raw(*val);
         }
         Ok(())
     }
 
-    fn pointwise_mul(&self, a: &[M31], b: &[M31], out: &mut [M31]) -> Result<(), NttError> {
+    fn pointwise_mul(&self, a: &[C::F], b: &[C::F], out: &mut [C::F]) -> Result<(), NttError> {
         if a.len() != b.len() || a.len() != out.len() {
             return Err(NttError::InvalidSize(a.len()));
         }
@@ -332,19 +331,26 @@ impl NttBackend<M31> for MetalCtGsR2 {
     }
 }
 
-// Twiddle generation and bit-reversal utilities are in crate::ntt::twiddles.
+// ── Type aliases for backward compatibility ─────────────────────────────
+
+/// M31 Circle NTT, radix-2 in-place (CT-DIT forward / GS-DIF inverse).
+pub type MetalCtGsR2 = MetalR2<crate::ntt::shader_config::M31R2Config>;
+
+/// BabyBear standard NTT, radix-2 in-place (single-column only).
+pub type BbMetalR2 = MetalR2<crate::ntt::shader_config::BbR2Config>;
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::ntt::test_utils::*;
+
+    use super::MetalCtGsR2;
 
     fn init() -> Option<MetalCtGsR2> {
         try_init_metal(|p| MetalCtGsR2::new(p))
     }
 
     #[test]
-    fn test_forward_matches_cpu() {
+    fn test_m31_generic_forward_matches_cpu() {
         let gpu = match init() {
             Some(g) => g,
             None => return,
@@ -353,7 +359,7 @@ mod tests {
     }
 
     #[test]
-    fn test_roundtrip() {
+    fn test_m31_generic_roundtrip() {
         let gpu = match init() {
             Some(g) => g,
             None => return,
@@ -362,7 +368,7 @@ mod tests {
     }
 
     #[test]
-    fn test_edge_cases() {
+    fn test_m31_generic_edge_cases() {
         let gpu = match init() {
             Some(g) => g,
             None => return,
@@ -372,7 +378,7 @@ mod tests {
     }
 
     #[test]
-    fn test_pointwise_mul() {
+    fn test_m31_generic_pointwise_mul() {
         let gpu = match init() {
             Some(g) => g,
             None => return,
@@ -381,7 +387,7 @@ mod tests {
     }
 
     #[test]
-    fn test_size2_forward_and_roundtrip() {
+    fn test_m31_generic_size2() {
         let gpu = match init() {
             Some(g) => g,
             None => return,

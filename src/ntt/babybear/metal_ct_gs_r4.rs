@@ -10,7 +10,7 @@
 use crate::field::babybear::BabyBear;
 use crate::field::Field;
 use crate::gpu::MetalContext;
-use crate::ntt::bb_twiddles::BbTwiddleCache;
+use crate::ntt::babybear::twiddles::BbTwiddleCache;
 use crate::ntt::{NttBackend, NttError};
 use metal::*;
 use std::path::Path;
@@ -80,7 +80,7 @@ impl BbMetalCtGsR4 {
             batch_r2_device_inv_pipeline: batch_r2_dev_inv,
             _batch_normalize_pipeline: batch_normalize,
             fused_norm_zeropad_shift_pipeline: fused_norm_zeropad_shift,
-            twiddle_cache: BbTwiddleCache::new(),
+            twiddle_cache: crate::ntt::babybear::twiddles::new_bb_twiddle_cache(),
         })
     }
 
@@ -923,7 +923,7 @@ impl NttBackend<BabyBear> for BbMetalCtGsR4 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ntt::bb_cpu_reference::BbCpuReferenceBackend;
+    use crate::ntt::babybear::cpu_reference::BbCpuReferenceBackend;
     use crate::ntt::test_utils::shader_dir;
 
     fn init() -> Option<BbMetalCtGsR4> {

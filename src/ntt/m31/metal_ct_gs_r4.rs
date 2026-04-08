@@ -14,7 +14,7 @@
 use crate::field::m31::M31;
 use crate::field::Field;
 use crate::gpu::MetalContext;
-use crate::ntt::twiddles::TwiddleCache;
+use crate::ntt::m31::twiddles::TwiddleCache;
 use crate::ntt::{NttBackend, NttError};
 use metal::*;
 use std::path::Path;
@@ -54,7 +54,7 @@ impl MetalCtGsR4 {
             r4_device_inv_pipeline: r4_dev_inv,
             r2_device_inv_pipeline: r2_dev_inv,
             normalize_pipeline: normalize,
-            twiddle_cache: TwiddleCache::new(),
+            twiddle_cache: crate::ntt::m31::twiddles::new_m31_twiddle_cache(),
         })
     }
 

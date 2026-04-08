@@ -14,7 +14,7 @@
 #ifndef NTT_COMMON_H
 #define NTT_COMMON_H
 
-#include "m31_field.metal"
+#include "../fields/m31_field.metal"
 
 // Forward butterfly (CT-DIT): in-place
 //   a' = a + w*b

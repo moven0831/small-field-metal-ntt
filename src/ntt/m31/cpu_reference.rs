@@ -1,6 +1,6 @@
 use crate::field::m31::M31;
 use crate::field::Field;
-use crate::ntt::twiddles::TwiddleCache;
+use crate::ntt::m31::twiddles::TwiddleCache;
 use crate::ntt::{NttBackend, NttError};
 
 /// CPU reference implementation of the Circle FFT (CFFT / DCCT) over M31.
@@ -36,7 +36,7 @@ impl Default for CpuReferenceBackend {
 impl CpuReferenceBackend {
     pub fn new() -> Self {
         Self {
-            twiddle_cache: TwiddleCache::new(),
+            twiddle_cache: crate::ntt::m31::twiddles::new_m31_twiddle_cache(),
         }
     }
 }

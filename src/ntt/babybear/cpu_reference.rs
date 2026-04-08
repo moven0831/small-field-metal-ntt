@@ -6,7 +6,7 @@
 
 use crate::field::babybear::BabyBear;
 use crate::field::Field;
-use crate::ntt::bb_twiddles::BbTwiddleCache;
+use crate::ntt::babybear::twiddles::BbTwiddleCache;
 use crate::ntt::{NttBackend, NttError};
 
 pub struct BbCpuReferenceBackend {
@@ -22,7 +22,7 @@ impl Default for BbCpuReferenceBackend {
 impl BbCpuReferenceBackend {
     pub fn new() -> Self {
         Self {
-            twiddle_cache: BbTwiddleCache::new(),
+            twiddle_cache: crate::ntt::babybear::twiddles::new_bb_twiddle_cache(),
         }
     }
 

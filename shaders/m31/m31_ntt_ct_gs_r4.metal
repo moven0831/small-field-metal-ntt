@@ -9,7 +9,7 @@
 #ifndef NTT_CT_GS_R4_H
 #define NTT_CT_GS_R4_H
 
-#include "m31_field.metal"
+#include "../fields/m31_field.metal"
 
 #define CT_GS_R4_MAX_TILE 8192
 

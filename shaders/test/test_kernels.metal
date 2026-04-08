@@ -1,7 +1,7 @@
 // Test kernels for validating the Metal compute pipeline.
 // These are used by integration tests, not by the NTT benchmark.
 
-#include "m31_field.metal"
+#include "../fields/m31_field.metal"
 
 /// Simple kernel: element-wise M31 addition of two buffers.
 /// out[i] = m31_add(a[i], b[i])
