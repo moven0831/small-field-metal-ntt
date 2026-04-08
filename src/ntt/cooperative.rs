@@ -28,8 +28,8 @@
 use crate::field::m31::M31;
 use crate::field::Field;
 use crate::gpu::MetalContext;
-use crate::ntt::NttError;
 use crate::ntt::twiddles::TwiddleCache;
+use crate::ntt::NttError;
 use metal::*;
 use std::path::Path;
 use std::time::Instant;
@@ -228,8 +228,8 @@ pub fn cooperative_forward_ntt(
 mod tests {
     use super::*;
     use crate::ntt::cpu_reference::CpuReferenceBackend;
-    use crate::ntt::NttBackend;
     use crate::ntt::test_utils::try_init_metal;
+    use crate::ntt::NttBackend;
 
     fn init() -> Option<CooperativeNttContext> {
         try_init_metal(|p| CooperativeNttContext::new(p))
@@ -344,7 +344,10 @@ mod tests {
 
         let result = cooperative_forward_ntt(&coop, &input, 10, 5).unwrap();
         let expected: Vec<u32> = cpu_data.iter().map(|m| m.0).collect();
-        assert_eq!(result.data, expected, "split=5 (half) should match CPU reference");
+        assert_eq!(
+            result.data, expected,
+            "split=5 (half) should match CPU reference"
+        );
     }
 
     #[test]
@@ -439,13 +442,19 @@ mod tests {
         // All GPU: cpu_time should be ~0
         let r0 = cooperative_forward_ntt(&coop, &input, 10, 0).unwrap();
         // Generous threshold: skipped phase measures only Instant::now() overhead + OS jitter
-        assert!(r0.cpu_time_us < 100.0, "split=0 should have near-zero CPU time");
+        assert!(
+            r0.cpu_time_us < 100.0,
+            "split=0 should have near-zero CPU time"
+        );
         assert!(r0.gpu_time_us > 0.0, "split=0 should have nonzero GPU time");
 
         // All CPU: gpu_time should be ~0
         let rk = cooperative_forward_ntt(&coop, &input, 10, 10).unwrap();
         assert!(rk.cpu_time_us > 0.0, "split=k should have nonzero CPU time");
-        assert!(rk.gpu_time_us < 100.0, "split=k should have near-zero GPU time");
+        assert!(
+            rk.gpu_time_us < 100.0,
+            "split=k should have near-zero GPU time"
+        );
 
         // Total should be >= max(cpu, gpu)
         let r5 = cooperative_forward_ntt(&coop, &input, 10, 5).unwrap();

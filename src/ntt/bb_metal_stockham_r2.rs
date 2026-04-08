@@ -46,7 +46,11 @@ impl BbMetalStockhamR2 {
         })
     }
 
-    pub fn forward_ntt_gpu(&self, input: &[u32], log_n: usize) -> Result<(Vec<u32>, u64), NttError> {
+    pub fn forward_ntt_gpu(
+        &self,
+        input: &[u32],
+        log_n: usize,
+    ) -> Result<(Vec<u32>, u64), NttError> {
         let n = input.len();
         if n != (1 << log_n) {
             return Err(NttError::InvalidSize(n));
@@ -73,11 +77,22 @@ impl BbMetalStockhamR2 {
             let buf_p = self.ctx.buffer_from_slice(&params)?;
 
             let num_butterflies = (n / 2) as u64;
-            let max_tpg = MetalContext::max_threads_per_threadgroup(&self.forward_device_pipeline) as u64;
+            let max_tpg =
+                MetalContext::max_threads_per_threadgroup(&self.forward_device_pipeline) as u64;
             let (tg, tpg) = MetalContext::compute_grid_1d(num_butterflies, max_tpg.min(256));
 
-            let (cur_in, cur_out) = if read_from_a { (&buf_a, &buf_b) } else { (&buf_b, &buf_a) };
-            MetalContext::encode_dispatch(cmd, &self.forward_device_pipeline, &[cur_in, cur_out, &buf_tw, &buf_p], tg, tpg);
+            let (cur_in, cur_out) = if read_from_a {
+                (&buf_a, &buf_b)
+            } else {
+                (&buf_b, &buf_a)
+            };
+            MetalContext::encode_dispatch(
+                cmd,
+                &self.forward_device_pipeline,
+                &[cur_in, cur_out, &buf_tw, &buf_p],
+                tg,
+                tpg,
+            );
             retain.push(buf_tw);
             retain.push(buf_p);
             read_from_a = !read_from_a;
@@ -97,20 +112,22 @@ impl BbMetalStockhamR2 {
             }
             let buf_tw = self.ctx.buffer_from_slice(&flat_tw)?;
 
-            let mut params: Vec<u32> = vec![
-                tile_log as u32,
-                num_tg_layers as u32,
-                start_layer as u32,
-            ];
+            let mut params: Vec<u32> =
+                vec![tile_log as u32, num_tg_layers as u32, start_layer as u32];
             params.extend(tw_offsets);
             let buf_p = self.ctx.buffer_from_slice(&params)?;
 
             let tile_size = 1usize << tile_log;
             let num_tiles = n / tile_size;
-            let max_tg_threads = MetalContext::max_threads_per_threadgroup(&self.forward_tg_pipeline) as u64;
+            let max_tg_threads =
+                MetalContext::max_threads_per_threadgroup(&self.forward_tg_pipeline) as u64;
             let threads = max_tg_threads.min(tile_size as u64 / 2).max(1);
 
-            let (cur_in, cur_out) = if read_from_a { (&buf_a, &buf_b) } else { (&buf_b, &buf_a) };
+            let (cur_in, cur_out) = if read_from_a {
+                (&buf_a, &buf_b)
+            } else {
+                (&buf_b, &buf_a)
+            };
             MetalContext::encode_dispatch(
                 cmd,
                 &self.forward_tg_pipeline,
@@ -129,7 +146,11 @@ impl BbMetalStockhamR2 {
         Ok((result, total_ns))
     }
 
-    pub fn inverse_ntt_gpu(&self, input: &[u32], log_n: usize) -> Result<(Vec<u32>, u64), NttError> {
+    pub fn inverse_ntt_gpu(
+        &self,
+        input: &[u32],
+        log_n: usize,
+    ) -> Result<(Vec<u32>, u64), NttError> {
         let n = input.len();
         if n != (1 << log_n) {
             return Err(NttError::InvalidSize(n));
@@ -161,20 +182,22 @@ impl BbMetalStockhamR2 {
             }
             let buf_tw = self.ctx.buffer_from_slice(&flat_tw)?;
 
-            let mut params: Vec<u32> = vec![
-                tile_log as u32,
-                num_tg_layers as u32,
-                start_layer as u32,
-            ];
+            let mut params: Vec<u32> =
+                vec![tile_log as u32, num_tg_layers as u32, start_layer as u32];
             params.extend(tw_offsets);
             let buf_p = self.ctx.buffer_from_slice(&params)?;
 
             let tile_size = 1usize << tile_log;
             let num_tiles = n / tile_size;
-            let max_tg_threads = MetalContext::max_threads_per_threadgroup(&self.inverse_tg_pipeline) as u64;
+            let max_tg_threads =
+                MetalContext::max_threads_per_threadgroup(&self.inverse_tg_pipeline) as u64;
             let threads = max_tg_threads.min(tile_size as u64 / 2).max(1);
 
-            let (cur_in, cur_out) = if read_from_a { (&buf_a, &buf_b) } else { (&buf_b, &buf_a) };
+            let (cur_in, cur_out) = if read_from_a {
+                (&buf_a, &buf_b)
+            } else {
+                (&buf_b, &buf_a)
+            };
             MetalContext::encode_dispatch(
                 cmd,
                 &self.inverse_tg_pipeline,
@@ -196,11 +219,22 @@ impl BbMetalStockhamR2 {
             let buf_p = self.ctx.buffer_from_slice(&params)?;
 
             let num_butterflies = (n / 2) as u64;
-            let max_tpg = MetalContext::max_threads_per_threadgroup(&self.inverse_device_pipeline) as u64;
+            let max_tpg =
+                MetalContext::max_threads_per_threadgroup(&self.inverse_device_pipeline) as u64;
             let (tg, tpg) = MetalContext::compute_grid_1d(num_butterflies, max_tpg.min(256));
 
-            let (cur_in, cur_out) = if read_from_a { (&buf_a, &buf_b) } else { (&buf_b, &buf_a) };
-            MetalContext::encode_dispatch(cmd, &self.inverse_device_pipeline, &[cur_in, cur_out, &buf_tw, &buf_p], tg, tpg);
+            let (cur_in, cur_out) = if read_from_a {
+                (&buf_a, &buf_b)
+            } else {
+                (&buf_b, &buf_a)
+            };
+            MetalContext::encode_dispatch(
+                cmd,
+                &self.inverse_device_pipeline,
+                &[cur_in, cur_out, &buf_tw, &buf_p],
+                tg,
+                tpg,
+            );
             retain.push(buf_tw);
             retain.push(buf_p);
             read_from_a = !read_from_a;
@@ -213,7 +247,13 @@ impl BbMetalStockhamR2 {
         let buf_p = self.ctx.buffer_from_slice(&norm_params)?;
         let max_tpg = MetalContext::max_threads_per_threadgroup(&self.normalize_pipeline) as u64;
         let (tg, tpg) = MetalContext::compute_grid_1d(n as u64, max_tpg.min(256));
-        MetalContext::encode_dispatch(cmd, &self.normalize_pipeline, &[result_buf, &buf_p], tg, tpg);
+        MetalContext::encode_dispatch(
+            cmd,
+            &self.normalize_pipeline,
+            &[result_buf, &buf_p],
+            tg,
+            tpg,
+        );
         retain.push(buf_p);
 
         let total_ns = MetalContext::submit_batch(cmd, &retain)?;
@@ -229,29 +269,50 @@ impl NttBackend<BabyBear> for BbMetalStockhamR2 {
 
     fn forward_ntt(&self, data: &mut [BabyBear], _twiddles: &[BabyBear]) -> Result<(), NttError> {
         let n = data.len();
-        if n == 0 || (n & (n - 1)) != 0 { return Err(NttError::InvalidSize(n)); }
-        if n == 1 { return Ok(()); }
+        if n == 0 || (n & (n - 1)) != 0 {
+            return Err(NttError::InvalidSize(n));
+        }
+        if n == 1 {
+            return Ok(());
+        }
         let log_n = n.trailing_zeros() as usize;
         let input: Vec<u32> = data.iter().map(|m| m.0).collect();
         let (result, _) = self.forward_ntt_gpu(&input, log_n)?;
-        for (i, val) in result.iter().enumerate() { data[i] = BabyBear(*val); }
+        for (i, val) in result.iter().enumerate() {
+            data[i] = BabyBear(*val);
+        }
         Ok(())
     }
 
     fn inverse_ntt(&self, data: &mut [BabyBear], _twiddles: &[BabyBear]) -> Result<(), NttError> {
         let n = data.len();
-        if n == 0 || (n & (n - 1)) != 0 { return Err(NttError::InvalidSize(n)); }
-        if n == 1 { return Ok(()); }
+        if n == 0 || (n & (n - 1)) != 0 {
+            return Err(NttError::InvalidSize(n));
+        }
+        if n == 1 {
+            return Ok(());
+        }
         let log_n = n.trailing_zeros() as usize;
         let input: Vec<u32> = data.iter().map(|m| m.0).collect();
         let (result, _) = self.inverse_ntt_gpu(&input, log_n)?;
-        for (i, val) in result.iter().enumerate() { data[i] = BabyBear(*val); }
+        for (i, val) in result.iter().enumerate() {
+            data[i] = BabyBear(*val);
+        }
         Ok(())
     }
 
-    fn pointwise_mul(&self, a: &[BabyBear], b: &[BabyBear], out: &mut [BabyBear]) -> Result<(), NttError> {
-        if a.len() != b.len() || a.len() != out.len() { return Err(NttError::InvalidSize(a.len())); }
-        for i in 0..a.len() { out[i] = a[i].mul(b[i]); }
+    fn pointwise_mul(
+        &self,
+        a: &[BabyBear],
+        b: &[BabyBear],
+        out: &mut [BabyBear],
+    ) -> Result<(), NttError> {
+        if a.len() != b.len() || a.len() != out.len() {
+            return Err(NttError::InvalidSize(a.len()));
+        }
+        for i in 0..a.len() {
+            out[i] = a[i].mul(b[i]);
+        }
         Ok(())
     }
 }
@@ -265,22 +326,30 @@ mod tests {
     fn init() -> Option<BbMetalStockhamR2> {
         match BbMetalStockhamR2::new(&shader_dir()) {
             Ok(g) => Some(g),
-            Err(NttError::DeviceNotFound) => { eprintln!("No Metal device — skipping"); None }
+            Err(NttError::DeviceNotFound) => {
+                eprintln!("No Metal device — skipping");
+                None
+            }
             Err(e) => panic!("Failed to init: {}", e),
         }
     }
 
     fn bb_test_data(n: usize) -> Vec<BabyBear> {
         let mut seed: u64 = n as u64 * 11111 + 98765;
-        (0..n).map(|_| {
-            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
-            BabyBear::to_monty(((seed >> 33) as u32) % BabyBear::P)
-        }).collect()
+        (0..n)
+            .map(|_| {
+                seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+                BabyBear::to_monty(((seed >> 33) as u32) % BabyBear::P)
+            })
+            .collect()
     }
 
     #[test]
     fn test_forward_matches_cpu() {
-        let gpu = match init() { Some(g) => g, None => return };
+        let gpu = match init() {
+            Some(g) => g,
+            None => return,
+        };
         let cpu = BbCpuReferenceBackend::new();
         for &n in &[4, 16, 256, 1024, 4096, 8192] {
             let original = bb_test_data(n);
@@ -294,12 +363,19 @@ mod tests {
 
     #[test]
     fn test_roundtrip() {
-        let gpu = match init() { Some(g) => g, None => return };
+        let gpu = match init() {
+            Some(g) => g,
+            None => return,
+        };
         for &n in &[4, 16, 256, 1024, 4096, 8192] {
             let original = bb_test_data(n);
             let mut data = original.clone();
             gpu.forward_ntt(&mut data, &[]).unwrap();
-            assert_ne!(data, original, "V3 forward should change data at size {}", n);
+            assert_ne!(
+                data, original,
+                "V3 forward should change data at size {}",
+                n
+            );
             gpu.inverse_ntt(&mut data, &[]).unwrap();
             assert_eq!(data, original, "V3 round-trip failed at size {}", n);
         }
@@ -307,7 +383,10 @@ mod tests {
 
     #[test]
     fn test_edge_cases() {
-        let gpu = match init() { Some(g) => g, None => return };
+        let gpu = match init() {
+            Some(g) => g,
+            None => return,
+        };
         let mut data = vec![BabyBear::zero(); 64];
         gpu.forward_ntt(&mut data, &[]).unwrap();
         assert!(data.iter().all(|&x| x == BabyBear::zero()));
@@ -319,7 +398,10 @@ mod tests {
 
     #[test]
     fn test_roundtrip_size4096_tg_boundary() {
-        let gpu = match init() { Some(g) => g, None => return };
+        let gpu = match init() {
+            Some(g) => g,
+            None => return,
+        };
         let original = bb_test_data(4096);
         let mut data = original.clone();
         gpu.forward_ntt(&mut data, &[]).unwrap();

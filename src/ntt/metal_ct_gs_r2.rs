@@ -17,8 +17,8 @@
 
 use crate::field::m31::M31;
 use crate::field::Field;
-use crate::ntt::twiddles::TwiddleCache;
 use crate::gpu::MetalContext;
+use crate::ntt::twiddles::TwiddleCache;
 use crate::ntt::{NttBackend, NttError};
 use metal::*;
 use std::path::Path;
@@ -101,14 +101,7 @@ impl MetalCtGsR2 {
         // ── Phase 2: threadgroup stages (small strides) ────────────────
         // Forward: layers from (tile_log-1) down to 0
         if tile_log > 0 {
-            self.encode_threadgroup_forward(
-                cmd,
-                &mut retain,
-                &buf_data,
-                &twiddles,
-                n,
-                tile_log,
-            )?;
+            self.encode_threadgroup_forward(cmd, &mut retain, &buf_data, &twiddles, n, tile_log)?;
         }
 
         let total_ns = MetalContext::submit_batch(cmd, &retain)?;
@@ -145,14 +138,7 @@ impl MetalCtGsR2 {
         // ── Phase 1: threadgroup stages (small strides) ────────────────
         // Inverse: layers from 0 up to (tile_log-1)
         if tile_log > 0 {
-            self.encode_threadgroup_inverse(
-                cmd,
-                &mut retain,
-                &buf_data,
-                &itwiddles,
-                n,
-                tile_log,
-            )?;
+            self.encode_threadgroup_inverse(cmd, &mut retain, &buf_data, &itwiddles, n, tile_log)?;
         }
 
         // ── Phase 2: device-memory stages (large strides) ──────────────
@@ -359,32 +345,47 @@ mod tests {
 
     #[test]
     fn test_forward_matches_cpu() {
-        let gpu = match init() { Some(g) => g, None => return };
+        let gpu = match init() {
+            Some(g) => g,
+            None => return,
+        };
         assert_forward_matches_cpu(&gpu, &[4, 16, 256, 1024, 4096, 8192, 16384]);
     }
 
     #[test]
     fn test_roundtrip() {
-        let gpu = match init() { Some(g) => g, None => return };
+        let gpu = match init() {
+            Some(g) => g,
+            None => return,
+        };
         assert_roundtrip(&gpu, &[4, 256, 1024, 8192, 16384]);
     }
 
     #[test]
     fn test_edge_cases() {
-        let gpu = match init() { Some(g) => g, None => return };
+        let gpu = match init() {
+            Some(g) => g,
+            None => return,
+        };
         assert_edge_cases(&gpu);
         assert_inverse_edge_cases(&gpu);
     }
 
     #[test]
     fn test_pointwise_mul() {
-        let gpu = match init() { Some(g) => g, None => return };
+        let gpu = match init() {
+            Some(g) => g,
+            None => return,
+        };
         assert_pointwise_mul(&gpu);
     }
 
     #[test]
     fn test_size2_forward_and_roundtrip() {
-        let gpu = match init() { Some(g) => g, None => return };
+        let gpu = match init() {
+            Some(g) => g,
+            None => return,
+        };
         assert_forward_matches_cpu(&gpu, &[2]);
         assert_roundtrip(&gpu, &[2]);
     }

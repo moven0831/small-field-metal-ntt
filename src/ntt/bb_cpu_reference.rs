@@ -251,8 +251,7 @@ mod tests {
         backend.forward_ntt(&mut ntt_a, &[]).unwrap();
         backend.forward_ntt(&mut ntt_b, &[]).unwrap();
 
-        let mut a_plus_b: Vec<BabyBear> =
-            a.iter().zip(b.iter()).map(|(&x, &y)| x.add(y)).collect();
+        let mut a_plus_b: Vec<BabyBear> = a.iter().zip(b.iter()).map(|(&x, &y)| x.add(y)).collect();
         backend.forward_ntt(&mut a_plus_b, &[]).unwrap();
 
         let sum: Vec<BabyBear> = ntt_a

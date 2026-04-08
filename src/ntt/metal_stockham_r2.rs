@@ -17,10 +17,10 @@
 //! Threadgroup tile: 4096 elements (half of Variant 2's 8192, due to needing
 //! two arrays). Handles 12 stages on-chip vs Variant 2's 13.
 
-use crate::ntt::twiddles::TwiddleCache;
 use crate::field::m31::M31;
 use crate::field::Field;
 use crate::gpu::MetalContext;
+use crate::ntt::twiddles::TwiddleCache;
 use crate::ntt::{NttBackend, NttError};
 use metal::*;
 use std::path::Path;
@@ -105,11 +105,7 @@ impl MetalStockhamR2 {
             let params: Vec<u32> = vec![stride as u32, n as u32];
             let buf_p = self.ctx.buffer_from_slice(&params)?;
 
-            let tg = MTLSize::new(
-                (num_butterflies + tpg_width - 1) / tpg_width,
-                1,
-                1,
-            );
+            let tg = MTLSize::new((num_butterflies + tpg_width - 1) / tpg_width, 1, 1);
             let tpg = MTLSize::new(tpg_width.min(num_butterflies), 1, 1);
 
             let (cur_in, cur_out) = if read_from_a {
@@ -147,11 +143,8 @@ impl MetalStockhamR2 {
             let buf_tw = self.ctx.buffer_from_slice(&flat_tw)?;
 
             // params: [tile_log, num_layers, start_layer, offsets...]
-            let mut params: Vec<u32> = vec![
-                tile_log as u32,
-                num_tg_layers as u32,
-                start_layer as u32,
-            ];
+            let mut params: Vec<u32> =
+                vec![tile_log as u32, num_tg_layers as u32, start_layer as u32];
             params.extend(tw_offsets);
             let buf_p = self.ctx.buffer_from_slice(&params)?;
 
@@ -237,11 +230,8 @@ impl MetalStockhamR2 {
             let buf_tw = self.ctx.buffer_from_slice(&flat_tw)?;
 
             // params: [tile_log, num_layers, start_layer, offsets...]
-            let mut params: Vec<u32> = vec![
-                tile_log as u32,
-                num_tg_layers as u32,
-                start_layer as u32,
-            ];
+            let mut params: Vec<u32> =
+                vec![tile_log as u32, num_tg_layers as u32, start_layer as u32];
             params.extend(tw_offsets);
             let buf_p = self.ctx.buffer_from_slice(&params)?;
 
@@ -287,11 +277,7 @@ impl MetalStockhamR2 {
             let params: Vec<u32> = vec![stride as u32, n as u32];
             let buf_p = self.ctx.buffer_from_slice(&params)?;
 
-            let tg = MTLSize::new(
-                (num_butterflies + tpg_width - 1) / tpg_width,
-                1,
-                1,
-            );
+            let tg = MTLSize::new((num_butterflies + tpg_width - 1) / tpg_width, 1, 1);
             let tpg = MTLSize::new(tpg_width.min(num_butterflies), 1, 1);
 
             let (cur_in, cur_out) = if read_from_a {
@@ -396,32 +382,47 @@ mod tests {
 
     #[test]
     fn test_forward_matches_cpu() {
-        let gpu = match init() { Some(g) => g, None => return };
+        let gpu = match init() {
+            Some(g) => g,
+            None => return,
+        };
         assert_forward_matches_cpu(&gpu, &[4, 16, 256, 1024, 4096, 8192, 16384]);
     }
 
     #[test]
     fn test_roundtrip() {
-        let gpu = match init() { Some(g) => g, None => return };
+        let gpu = match init() {
+            Some(g) => g,
+            None => return,
+        };
         assert_roundtrip(&gpu, &[4, 256, 1024, 8192, 16384]);
     }
 
     #[test]
     fn test_edge_cases() {
-        let gpu = match init() { Some(g) => g, None => return };
+        let gpu = match init() {
+            Some(g) => g,
+            None => return,
+        };
         assert_edge_cases(&gpu);
         assert_inverse_edge_cases(&gpu);
     }
 
     #[test]
     fn test_pointwise_mul() {
-        let gpu = match init() { Some(g) => g, None => return };
+        let gpu = match init() {
+            Some(g) => g,
+            None => return,
+        };
         assert_pointwise_mul(&gpu);
     }
 
     #[test]
     fn test_size2_forward_and_roundtrip() {
-        let gpu = match init() { Some(g) => g, None => return };
+        let gpu = match init() {
+            Some(g) => g,
+            None => return,
+        };
         assert_forward_matches_cpu(&gpu, &[2]);
         assert_roundtrip(&gpu, &[2]);
     }
@@ -431,7 +432,10 @@ mod tests {
     #[test]
     fn test_roundtrip_size4096_tg_boundary() {
         // Exactly one TG tile (MAX_TILE_LOG=12) — no device phase
-        let gpu = match init() { Some(g) => g, None => return };
+        let gpu = match init() {
+            Some(g) => g,
+            None => return,
+        };
         assert_roundtrip(&gpu, &[4096]);
     }
 }

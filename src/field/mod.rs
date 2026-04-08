@@ -1,6 +1,6 @@
-pub mod m31;
 pub mod babybear;
 pub mod circle;
+pub mod m31;
 
 /// Trait for finite field arithmetic used by NTT backends.
 /// Implementations must be consistent between Rust (CPU) and Metal (GPU) versions.

@@ -83,10 +83,18 @@ impl BbMetalCtGsR4 {
         })
     }
 
-    pub fn forward_ntt_gpu(&self, input: &[u32], log_n: usize) -> Result<(Vec<u32>, u64), NttError> {
+    pub fn forward_ntt_gpu(
+        &self,
+        input: &[u32],
+        log_n: usize,
+    ) -> Result<(Vec<u32>, u64), NttError> {
         let n = input.len();
-        if n != (1 << log_n) { return Err(NttError::InvalidSize(n)); }
-        if log_n == 0 { return Ok((input.to_vec(), 0)); }
+        if n != (1 << log_n) {
+            return Err(NttError::InvalidSize(n));
+        }
+        if log_n == 0 {
+            return Ok((input.to_vec(), 0));
+        }
 
         let twiddles = self.twiddle_cache.forward(log_n as u32);
         let buf_data = self.ctx.buffer_from_slice(input)?;
@@ -110,10 +118,18 @@ impl BbMetalCtGsR4 {
         Ok((result, total_ns))
     }
 
-    pub fn inverse_ntt_gpu(&self, input: &[u32], log_n: usize) -> Result<(Vec<u32>, u64), NttError> {
+    pub fn inverse_ntt_gpu(
+        &self,
+        input: &[u32],
+        log_n: usize,
+    ) -> Result<(Vec<u32>, u64), NttError> {
         let n = input.len();
-        if n != (1 << log_n) { return Err(NttError::InvalidSize(n)); }
-        if log_n == 0 { return Ok((input.to_vec(), 0)); }
+        if n != (1 << log_n) {
+            return Err(NttError::InvalidSize(n));
+        }
+        if log_n == 0 {
+            return Ok((input.to_vec(), 0));
+        }
 
         let itwiddles = self.twiddle_cache.inverse(log_n as u32);
         let buf_data = self.ctx.buffer_from_slice(input)?;
@@ -129,7 +145,15 @@ impl BbMetalCtGsR4 {
         // Device-memory phase: layers tile_log up to (log_n-1)
         let num_device_layers = log_n - tile_log;
         if num_device_layers > 0 {
-            self.encode_device_inverse(cmd, &mut retain, &buf_data, &itwiddles, n, log_n, tile_log)?;
+            self.encode_device_inverse(
+                cmd,
+                &mut retain,
+                &buf_data,
+                &itwiddles,
+                n,
+                log_n,
+                tile_log,
+            )?;
         }
 
         // Normalize
@@ -234,14 +258,12 @@ impl BbMetalCtGsR4 {
         inv_n: BabyBear,
     ) -> Result<(), NttError> {
         let buf_shifts = self.ctx.buffer_from_slice(shift_powers)?;
-        let params: Vec<u32> = vec![
-            n_orig as u32, n_ext as u32, batch_size as u32, inv_n.0,
-        ];
+        let params: Vec<u32> = vec![n_orig as u32, n_ext as u32, batch_size as u32, inv_n.0];
         let buf_p = self.ctx.buffer_from_slice(&params)?;
 
-        let max_tpg = MetalContext::max_threads_per_threadgroup(
-            &self.fused_norm_zeropad_shift_pipeline,
-        ) as u64;
+        let max_tpg =
+            MetalContext::max_threads_per_threadgroup(&self.fused_norm_zeropad_shift_pipeline)
+                as u64;
         let tpg_x = max_tpg.min(n_ext as u64).max(1);
         let tg_x = (n_ext as u64).div_ceil(tpg_x);
 
@@ -260,9 +282,15 @@ impl BbMetalCtGsR4 {
     // ── Batch device phase encoding ─────────────────────────────────────
 
     fn encode_batch_device_forward(
-        &self, cmd: &CommandBufferRef, retain: &mut Vec<Buffer>,
-        buf_data: &Buffer, twiddles: &[Vec<BabyBear>],
-        n: usize, log_n: usize, tile_log: usize, batch_size: usize,
+        &self,
+        cmd: &CommandBufferRef,
+        retain: &mut Vec<Buffer>,
+        buf_data: &Buffer,
+        twiddles: &[Vec<BabyBear>],
+        n: usize,
+        log_n: usize,
+        tile_log: usize,
+        batch_size: usize,
     ) -> Result<(), NttError> {
         let num_device_layers = log_n - tile_log;
         let num_r4 = num_device_layers / 2;
@@ -272,25 +300,45 @@ impl BbMetalCtGsR4 {
         for _ in 0..num_r4 {
             let k = current_layer;
             self.encode_batch_r4_dispatch(
-                cmd, retain, &self.batch_r4_device_pipeline, buf_data,
-                &twiddles[k], &twiddles[k - 1], 1 << k, 1 << (k - 1), n, batch_size,
+                cmd,
+                retain,
+                &self.batch_r4_device_pipeline,
+                buf_data,
+                &twiddles[k],
+                &twiddles[k - 1],
+                1 << k,
+                1 << (k - 1),
+                n,
+                batch_size,
             )?;
             current_layer -= 2;
         }
 
         if has_r2 {
             self.encode_batch_r2_dispatch(
-                cmd, retain, &self.batch_r2_device_pipeline, buf_data,
-                &twiddles[current_layer], 1 << current_layer, n, batch_size,
+                cmd,
+                retain,
+                &self.batch_r2_device_pipeline,
+                buf_data,
+                &twiddles[current_layer],
+                1 << current_layer,
+                n,
+                batch_size,
             )?;
         }
         Ok(())
     }
 
     fn encode_batch_device_inverse(
-        &self, cmd: &CommandBufferRef, retain: &mut Vec<Buffer>,
-        buf_data: &Buffer, itwiddles: &[Vec<BabyBear>],
-        n: usize, log_n: usize, tile_log: usize, batch_size: usize,
+        &self,
+        cmd: &CommandBufferRef,
+        retain: &mut Vec<Buffer>,
+        buf_data: &Buffer,
+        itwiddles: &[Vec<BabyBear>],
+        n: usize,
+        log_n: usize,
+        tile_log: usize,
+        batch_size: usize,
     ) -> Result<(), NttError> {
         let num_device_layers = log_n - tile_log;
         let has_r2 = num_device_layers % 2 == 1;
@@ -299,8 +347,14 @@ impl BbMetalCtGsR4 {
 
         if has_r2 {
             self.encode_batch_r2_dispatch(
-                cmd, retain, &self.batch_r2_device_inv_pipeline, buf_data,
-                &itwiddles[current_layer], 1 << current_layer, n, batch_size,
+                cmd,
+                retain,
+                &self.batch_r2_device_inv_pipeline,
+                buf_data,
+                &itwiddles[current_layer],
+                1 << current_layer,
+                n,
+                batch_size,
             )?;
             current_layer += 1;
         }
@@ -309,8 +363,16 @@ impl BbMetalCtGsR4 {
             let k_inner = current_layer;
             let k_outer = current_layer + 1;
             self.encode_batch_r4_dispatch(
-                cmd, retain, &self.batch_r4_device_inv_pipeline, buf_data,
-                &itwiddles[k_outer], &itwiddles[k_inner], 1 << k_outer, 1 << k_inner, n, batch_size,
+                cmd,
+                retain,
+                &self.batch_r4_device_inv_pipeline,
+                buf_data,
+                &itwiddles[k_outer],
+                &itwiddles[k_inner],
+                1 << k_outer,
+                1 << k_inner,
+                n,
+                batch_size,
             )?;
             current_layer += 2;
         }
@@ -320,9 +382,14 @@ impl BbMetalCtGsR4 {
     // ── Batch threadgroup phase encoding ─────────────────────────────────
 
     fn encode_batch_threadgroup_forward(
-        &self, cmd: &CommandBufferRef, retain: &mut Vec<Buffer>,
-        buf_data: &Buffer, twiddles: &[Vec<BabyBear>],
-        n: usize, tile_log: usize, batch_size: usize,
+        &self,
+        cmd: &CommandBufferRef,
+        retain: &mut Vec<Buffer>,
+        buf_data: &Buffer,
+        twiddles: &[Vec<BabyBear>],
+        n: usize,
+        tile_log: usize,
+        batch_size: usize,
     ) -> Result<(), NttError> {
         let num_tg_layers = tile_log;
         let num_r4 = num_tg_layers / 2;
@@ -351,21 +418,26 @@ impl BbMetalCtGsR4 {
 
         // params: [n, tile_log, num_r4, has_final_r2, num_tiles_per_col, tw_offsets...]
         let mut params: Vec<u32> = vec![
-            n as u32, tile_log as u32, num_r4 as u32, has_final_r2 as u32,
+            n as u32,
+            tile_log as u32,
+            num_r4 as u32,
+            has_final_r2 as u32,
             num_tiles_per_col as u32,
         ];
         params.extend(tw_offsets);
         let buf_p = self.ctx.buffer_from_slice(&params)?;
 
         let total_threadgroups = (num_tiles_per_col * batch_size) as u64;
-        let max_tg_threads = MetalContext::max_threads_per_threadgroup(
-            &self.batch_forward_tg_pipeline,
-        ) as u64;
+        let max_tg_threads =
+            MetalContext::max_threads_per_threadgroup(&self.batch_forward_tg_pipeline) as u64;
         let threads = max_tg_threads.min(tile_size as u64 / 4).max(1);
 
         MetalContext::encode_dispatch(
-            cmd, &self.batch_forward_tg_pipeline, &[buf_data, &buf_tw, &buf_p],
-            MTLSize::new(total_threadgroups, 1, 1), MTLSize::new(threads, 1, 1),
+            cmd,
+            &self.batch_forward_tg_pipeline,
+            &[buf_data, &buf_tw, &buf_p],
+            MTLSize::new(total_threadgroups, 1, 1),
+            MTLSize::new(threads, 1, 1),
         );
         retain.push(buf_tw);
         retain.push(buf_p);
@@ -373,9 +445,14 @@ impl BbMetalCtGsR4 {
     }
 
     fn encode_batch_threadgroup_inverse(
-        &self, cmd: &CommandBufferRef, retain: &mut Vec<Buffer>,
-        buf_data: &Buffer, itwiddles: &[Vec<BabyBear>],
-        n: usize, tile_log: usize, batch_size: usize,
+        &self,
+        cmd: &CommandBufferRef,
+        retain: &mut Vec<Buffer>,
+        buf_data: &Buffer,
+        itwiddles: &[Vec<BabyBear>],
+        n: usize,
+        tile_log: usize,
+        batch_size: usize,
     ) -> Result<(), NttError> {
         let num_tg_layers = tile_log;
         let has_initial_r2 = num_tg_layers % 2 == 1;
@@ -406,21 +483,26 @@ impl BbMetalCtGsR4 {
 
         // params: [n, tile_log, num_r4, has_initial_r2, num_tiles_per_col, tw_offsets...]
         let mut params: Vec<u32> = vec![
-            n as u32, tile_log as u32, num_r4 as u32, has_initial_r2 as u32,
+            n as u32,
+            tile_log as u32,
+            num_r4 as u32,
+            has_initial_r2 as u32,
             num_tiles_per_col as u32,
         ];
         params.extend(tw_offsets);
         let buf_p = self.ctx.buffer_from_slice(&params)?;
 
         let total_threadgroups = (num_tiles_per_col * batch_size) as u64;
-        let max_tg_threads = MetalContext::max_threads_per_threadgroup(
-            &self.batch_inverse_tg_pipeline,
-        ) as u64;
+        let max_tg_threads =
+            MetalContext::max_threads_per_threadgroup(&self.batch_inverse_tg_pipeline) as u64;
         let threads = max_tg_threads.min(tile_size as u64 / 4).max(1);
 
         MetalContext::encode_dispatch(
-            cmd, &self.batch_inverse_tg_pipeline, &[buf_data, &buf_tw, &buf_p],
-            MTLSize::new(total_threadgroups, 1, 1), MTLSize::new(threads, 1, 1),
+            cmd,
+            &self.batch_inverse_tg_pipeline,
+            &[buf_data, &buf_tw, &buf_p],
+            MTLSize::new(total_threadgroups, 1, 1),
+            MTLSize::new(threads, 1, 1),
         );
         retain.push(buf_tw);
         retain.push(buf_p);
@@ -430,10 +512,17 @@ impl BbMetalCtGsR4 {
     // ── Batch dispatch helpers ───────────────────────────────────────────
 
     fn encode_batch_r4_dispatch(
-        &self, cmd: &CommandBufferRef, retain: &mut Vec<Buffer>,
-        pipeline: &ComputePipelineState, buf_data: &Buffer,
-        tw_outer: &[BabyBear], tw_inner: &[BabyBear],
-        outer: usize, inner: usize, n: usize, batch_size: usize,
+        &self,
+        cmd: &CommandBufferRef,
+        retain: &mut Vec<Buffer>,
+        pipeline: &ComputePipelineState,
+        buf_data: &Buffer,
+        tw_outer: &[BabyBear],
+        tw_inner: &[BabyBear],
+        outer: usize,
+        inner: usize,
+        n: usize,
+        batch_size: usize,
     ) -> Result<(), NttError> {
         let tw_o: Vec<u32> = tw_outer.iter().map(|m| m.0).collect();
         let tw_i: Vec<u32> = tw_inner.iter().map(|m| m.0).collect();
@@ -448,8 +537,11 @@ impl BbMetalCtGsR4 {
         let tg_x = num_butterflies.div_ceil(tpg_x);
 
         MetalContext::encode_dispatch(
-            cmd, pipeline, &[buf_data, &buf_tw_o, &buf_tw_i, &buf_p],
-            MTLSize::new(tg_x, batch_size as u64, 1), MTLSize::new(tpg_x, 1, 1),
+            cmd,
+            pipeline,
+            &[buf_data, &buf_tw_o, &buf_tw_i, &buf_p],
+            MTLSize::new(tg_x, batch_size as u64, 1),
+            MTLSize::new(tpg_x, 1, 1),
         );
         retain.push(buf_tw_o);
         retain.push(buf_tw_i);
@@ -458,9 +550,15 @@ impl BbMetalCtGsR4 {
     }
 
     fn encode_batch_r2_dispatch(
-        &self, cmd: &CommandBufferRef, retain: &mut Vec<Buffer>,
-        pipeline: &ComputePipelineState, buf_data: &Buffer,
-        twiddles: &[BabyBear], stride: usize, n: usize, batch_size: usize,
+        &self,
+        cmd: &CommandBufferRef,
+        retain: &mut Vec<Buffer>,
+        pipeline: &ComputePipelineState,
+        buf_data: &Buffer,
+        twiddles: &[BabyBear],
+        stride: usize,
+        n: usize,
+        batch_size: usize,
     ) -> Result<(), NttError> {
         let tw_data: Vec<u32> = twiddles.iter().map(|m| m.0).collect();
         let buf_tw = self.ctx.buffer_from_slice(&tw_data)?;
@@ -473,8 +571,11 @@ impl BbMetalCtGsR4 {
         let tg_x = num_butterflies.div_ceil(tpg_x);
 
         MetalContext::encode_dispatch(
-            cmd, pipeline, &[buf_data, &buf_tw, &buf_p],
-            MTLSize::new(tg_x, batch_size as u64, 1), MTLSize::new(tpg_x, 1, 1),
+            cmd,
+            pipeline,
+            &[buf_data, &buf_tw, &buf_p],
+            MTLSize::new(tg_x, batch_size as u64, 1),
+            MTLSize::new(tpg_x, 1, 1),
         );
         retain.push(buf_tw);
         retain.push(buf_p);
@@ -484,9 +585,14 @@ impl BbMetalCtGsR4 {
     // ── Single-column device phase encoding ─────────────────────────────
 
     fn encode_device_forward(
-        &self, cmd: &CommandBufferRef, retain: &mut Vec<Buffer>,
-        buf_data: &Buffer, twiddles: &[Vec<BabyBear>],
-        n: usize, log_n: usize, tile_log: usize,
+        &self,
+        cmd: &CommandBufferRef,
+        retain: &mut Vec<Buffer>,
+        buf_data: &Buffer,
+        twiddles: &[Vec<BabyBear>],
+        n: usize,
+        log_n: usize,
+        tile_log: usize,
     ) -> Result<(), NttError> {
         let num_device_layers = log_n - tile_log;
         let num_r4 = num_device_layers / 2;
@@ -495,22 +601,43 @@ impl BbMetalCtGsR4 {
 
         for _ in 0..num_r4 {
             let k = current_layer;
-            self.encode_r4_dispatch(cmd, retain, &self.r4_device_pipeline, buf_data,
-                &twiddles[k], &twiddles[k - 1], 1 << k, 1 << (k - 1), n)?;
+            self.encode_r4_dispatch(
+                cmd,
+                retain,
+                &self.r4_device_pipeline,
+                buf_data,
+                &twiddles[k],
+                &twiddles[k - 1],
+                1 << k,
+                1 << (k - 1),
+                n,
+            )?;
             current_layer -= 2;
         }
 
         if has_r2 {
-            self.encode_r2_dispatch(cmd, retain, &self.r2_device_pipeline, buf_data,
-                &twiddles[current_layer], 1 << current_layer, n)?;
+            self.encode_r2_dispatch(
+                cmd,
+                retain,
+                &self.r2_device_pipeline,
+                buf_data,
+                &twiddles[current_layer],
+                1 << current_layer,
+                n,
+            )?;
         }
         Ok(())
     }
 
     fn encode_device_inverse(
-        &self, cmd: &CommandBufferRef, retain: &mut Vec<Buffer>,
-        buf_data: &Buffer, itwiddles: &[Vec<BabyBear>],
-        n: usize, log_n: usize, tile_log: usize,
+        &self,
+        cmd: &CommandBufferRef,
+        retain: &mut Vec<Buffer>,
+        buf_data: &Buffer,
+        itwiddles: &[Vec<BabyBear>],
+        n: usize,
+        log_n: usize,
+        tile_log: usize,
     ) -> Result<(), NttError> {
         let num_device_layers = log_n - tile_log;
         let has_r2 = num_device_layers % 2 == 1;
@@ -518,16 +645,32 @@ impl BbMetalCtGsR4 {
         let mut current_layer = tile_log;
 
         if has_r2 {
-            self.encode_r2_dispatch(cmd, retain, &self.r2_device_inv_pipeline, buf_data,
-                &itwiddles[current_layer], 1 << current_layer, n)?;
+            self.encode_r2_dispatch(
+                cmd,
+                retain,
+                &self.r2_device_inv_pipeline,
+                buf_data,
+                &itwiddles[current_layer],
+                1 << current_layer,
+                n,
+            )?;
             current_layer += 1;
         }
 
         for _ in 0..num_r4 {
             let k_inner = current_layer;
             let k_outer = current_layer + 1;
-            self.encode_r4_dispatch(cmd, retain, &self.r4_device_inv_pipeline, buf_data,
-                &itwiddles[k_outer], &itwiddles[k_inner], 1 << k_outer, 1 << k_inner, n)?;
+            self.encode_r4_dispatch(
+                cmd,
+                retain,
+                &self.r4_device_inv_pipeline,
+                buf_data,
+                &itwiddles[k_outer],
+                &itwiddles[k_inner],
+                1 << k_outer,
+                1 << k_inner,
+                n,
+            )?;
             current_layer += 2;
         }
         Ok(())
@@ -536,9 +679,13 @@ impl BbMetalCtGsR4 {
     // ── Threadgroup phase encoding ───────────────────────────────────────
 
     fn encode_threadgroup_forward(
-        &self, cmd: &CommandBufferRef, retain: &mut Vec<Buffer>,
-        buf_data: &Buffer, twiddles: &[Vec<BabyBear>],
-        n: usize, tile_log: usize,
+        &self,
+        cmd: &CommandBufferRef,
+        retain: &mut Vec<Buffer>,
+        buf_data: &Buffer,
+        twiddles: &[Vec<BabyBear>],
+        n: usize,
+        tile_log: usize,
     ) -> Result<(), NttError> {
         let num_tg_layers = tile_log;
         let num_r4 = num_tg_layers / 2;
@@ -565,27 +712,40 @@ impl BbMetalCtGsR4 {
 
         // params: [n, tile_log, num_r4, has_final_r2, tw_offsets...]
         let mut params: Vec<u32> = vec![
-            n as u32, tile_log as u32, num_r4 as u32, has_final_r2 as u32,
+            n as u32,
+            tile_log as u32,
+            num_r4 as u32,
+            has_final_r2 as u32,
         ];
         params.extend(tw_offsets);
         let buf_p = self.ctx.buffer_from_slice(&params)?;
 
         let tile_size = 1usize << tile_log;
         let num_tiles = n / tile_size;
-        let max_tg_threads = MetalContext::max_threads_per_threadgroup(&self.forward_tg_pipeline) as u64;
+        let max_tg_threads =
+            MetalContext::max_threads_per_threadgroup(&self.forward_tg_pipeline) as u64;
         let threads = max_tg_threads.min(tile_size as u64 / 4).max(1);
 
-        MetalContext::encode_dispatch(cmd, &self.forward_tg_pipeline, &[buf_data, &buf_tw, &buf_p],
-            MTLSize::new(num_tiles as u64, 1, 1), MTLSize::new(threads, 1, 1));
+        MetalContext::encode_dispatch(
+            cmd,
+            &self.forward_tg_pipeline,
+            &[buf_data, &buf_tw, &buf_p],
+            MTLSize::new(num_tiles as u64, 1, 1),
+            MTLSize::new(threads, 1, 1),
+        );
         retain.push(buf_tw);
         retain.push(buf_p);
         Ok(())
     }
 
     fn encode_threadgroup_inverse(
-        &self, cmd: &CommandBufferRef, retain: &mut Vec<Buffer>,
-        buf_data: &Buffer, itwiddles: &[Vec<BabyBear>],
-        n: usize, tile_log: usize,
+        &self,
+        cmd: &CommandBufferRef,
+        retain: &mut Vec<Buffer>,
+        buf_data: &Buffer,
+        itwiddles: &[Vec<BabyBear>],
+        n: usize,
+        tile_log: usize,
     ) -> Result<(), NttError> {
         let num_tg_layers = tile_log;
         let has_initial_r2 = num_tg_layers % 2 == 1;
@@ -614,18 +774,27 @@ impl BbMetalCtGsR4 {
 
         // params: [n, tile_log, num_r4, has_initial_r2, tw_offsets...]
         let mut params: Vec<u32> = vec![
-            n as u32, tile_log as u32, num_r4 as u32, has_initial_r2 as u32,
+            n as u32,
+            tile_log as u32,
+            num_r4 as u32,
+            has_initial_r2 as u32,
         ];
         params.extend(tw_offsets);
         let buf_p = self.ctx.buffer_from_slice(&params)?;
 
         let tile_size = 1usize << tile_log;
         let num_tiles = n / tile_size;
-        let max_tg_threads = MetalContext::max_threads_per_threadgroup(&self.inverse_tg_pipeline) as u64;
+        let max_tg_threads =
+            MetalContext::max_threads_per_threadgroup(&self.inverse_tg_pipeline) as u64;
         let threads = max_tg_threads.min(tile_size as u64 / 4).max(1);
 
-        MetalContext::encode_dispatch(cmd, &self.inverse_tg_pipeline, &[buf_data, &buf_tw, &buf_p],
-            MTLSize::new(num_tiles as u64, 1, 1), MTLSize::new(threads, 1, 1));
+        MetalContext::encode_dispatch(
+            cmd,
+            &self.inverse_tg_pipeline,
+            &[buf_data, &buf_tw, &buf_p],
+            MTLSize::new(num_tiles as u64, 1, 1),
+            MTLSize::new(threads, 1, 1),
+        );
         retain.push(buf_tw);
         retain.push(buf_p);
         Ok(())
@@ -634,10 +803,16 @@ impl BbMetalCtGsR4 {
     // ── Dispatch helpers ─────────────────────────────────────────────────
 
     fn encode_r4_dispatch(
-        &self, cmd: &CommandBufferRef, retain: &mut Vec<Buffer>,
-        pipeline: &ComputePipelineState, buf_data: &Buffer,
-        tw_outer: &[BabyBear], tw_inner: &[BabyBear],
-        outer: usize, inner: usize, n: usize,
+        &self,
+        cmd: &CommandBufferRef,
+        retain: &mut Vec<Buffer>,
+        pipeline: &ComputePipelineState,
+        buf_data: &Buffer,
+        tw_outer: &[BabyBear],
+        tw_inner: &[BabyBear],
+        outer: usize,
+        inner: usize,
+        n: usize,
     ) -> Result<(), NttError> {
         let tw_o: Vec<u32> = tw_outer.iter().map(|m| m.0).collect();
         let tw_i: Vec<u32> = tw_inner.iter().map(|m| m.0).collect();
@@ -650,7 +825,13 @@ impl BbMetalCtGsR4 {
         let max_tpg = MetalContext::max_threads_per_threadgroup(pipeline) as u64;
         let (tg, tpg) = MetalContext::compute_grid_1d(num_butterflies, max_tpg.min(256));
 
-        MetalContext::encode_dispatch(cmd, pipeline, &[buf_data, &buf_tw_o, &buf_tw_i, &buf_p], tg, tpg);
+        MetalContext::encode_dispatch(
+            cmd,
+            pipeline,
+            &[buf_data, &buf_tw_o, &buf_tw_i, &buf_p],
+            tg,
+            tpg,
+        );
         retain.push(buf_tw_o);
         retain.push(buf_tw_i);
         retain.push(buf_p);
@@ -658,9 +839,14 @@ impl BbMetalCtGsR4 {
     }
 
     fn encode_r2_dispatch(
-        &self, cmd: &CommandBufferRef, retain: &mut Vec<Buffer>,
-        pipeline: &ComputePipelineState, buf_data: &Buffer,
-        twiddles: &[BabyBear], stride: usize, n: usize,
+        &self,
+        cmd: &CommandBufferRef,
+        retain: &mut Vec<Buffer>,
+        pipeline: &ComputePipelineState,
+        buf_data: &Buffer,
+        twiddles: &[BabyBear],
+        stride: usize,
+        n: usize,
     ) -> Result<(), NttError> {
         let tw_data: Vec<u32> = twiddles.iter().map(|m| m.0).collect();
         let buf_tw = self.ctx.buffer_from_slice(&tw_data)?;
@@ -679,33 +865,56 @@ impl BbMetalCtGsR4 {
 }
 
 impl NttBackend<BabyBear> for BbMetalCtGsR4 {
-    fn name(&self) -> &str { "bb-metal-ct-gs-r4" }
+    fn name(&self) -> &str {
+        "bb-metal-ct-gs-r4"
+    }
 
     fn forward_ntt(&self, data: &mut [BabyBear], _twiddles: &[BabyBear]) -> Result<(), NttError> {
         let n = data.len();
-        if n == 0 || (n & (n - 1)) != 0 { return Err(NttError::InvalidSize(n)); }
-        if n == 1 { return Ok(()); }
+        if n == 0 || (n & (n - 1)) != 0 {
+            return Err(NttError::InvalidSize(n));
+        }
+        if n == 1 {
+            return Ok(());
+        }
         let log_n = n.trailing_zeros() as usize;
         let input: Vec<u32> = data.iter().map(|m| m.0).collect();
         let (result, _) = self.forward_ntt_gpu(&input, log_n)?;
-        for (i, val) in result.iter().enumerate() { data[i] = BabyBear(*val); }
+        for (i, val) in result.iter().enumerate() {
+            data[i] = BabyBear(*val);
+        }
         Ok(())
     }
 
     fn inverse_ntt(&self, data: &mut [BabyBear], _twiddles: &[BabyBear]) -> Result<(), NttError> {
         let n = data.len();
-        if n == 0 || (n & (n - 1)) != 0 { return Err(NttError::InvalidSize(n)); }
-        if n == 1 { return Ok(()); }
+        if n == 0 || (n & (n - 1)) != 0 {
+            return Err(NttError::InvalidSize(n));
+        }
+        if n == 1 {
+            return Ok(());
+        }
         let log_n = n.trailing_zeros() as usize;
         let input: Vec<u32> = data.iter().map(|m| m.0).collect();
         let (result, _) = self.inverse_ntt_gpu(&input, log_n)?;
-        for (i, val) in result.iter().enumerate() { data[i] = BabyBear(*val); }
+        for (i, val) in result.iter().enumerate() {
+            data[i] = BabyBear(*val);
+        }
         Ok(())
     }
 
-    fn pointwise_mul(&self, a: &[BabyBear], b: &[BabyBear], out: &mut [BabyBear]) -> Result<(), NttError> {
-        if a.len() != b.len() || a.len() != out.len() { return Err(NttError::InvalidSize(a.len())); }
-        for i in 0..a.len() { out[i] = a[i].mul(b[i]); }
+    fn pointwise_mul(
+        &self,
+        a: &[BabyBear],
+        b: &[BabyBear],
+        out: &mut [BabyBear],
+    ) -> Result<(), NttError> {
+        if a.len() != b.len() || a.len() != out.len() {
+            return Err(NttError::InvalidSize(a.len()));
+        }
+        for i in 0..a.len() {
+            out[i] = a[i].mul(b[i]);
+        }
         Ok(())
     }
 }
@@ -719,22 +928,30 @@ mod tests {
     fn init() -> Option<BbMetalCtGsR4> {
         match BbMetalCtGsR4::new(&shader_dir()) {
             Ok(g) => Some(g),
-            Err(NttError::DeviceNotFound) => { eprintln!("No Metal device — skipping"); None }
+            Err(NttError::DeviceNotFound) => {
+                eprintln!("No Metal device — skipping");
+                None
+            }
             Err(e) => panic!("Failed to init: {}", e),
         }
     }
 
     fn bb_test_data(n: usize) -> Vec<BabyBear> {
         let mut seed: u64 = n as u64 * 11111 + 98765;
-        (0..n).map(|_| {
-            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
-            BabyBear::to_monty(((seed >> 33) as u32) % BabyBear::P)
-        }).collect()
+        (0..n)
+            .map(|_| {
+                seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+                BabyBear::to_monty(((seed >> 33) as u32) % BabyBear::P)
+            })
+            .collect()
     }
 
     #[test]
     fn test_forward_matches_cpu() {
-        let gpu = match init() { Some(g) => g, None => return };
+        let gpu = match init() {
+            Some(g) => g,
+            None => return,
+        };
         let cpu = BbCpuReferenceBackend::new();
         for &n in &[4, 16, 256, 1024, 4096, 8192, 16384] {
             let original = bb_test_data(n);
@@ -748,12 +965,19 @@ mod tests {
 
     #[test]
     fn test_roundtrip() {
-        let gpu = match init() { Some(g) => g, None => return };
+        let gpu = match init() {
+            Some(g) => g,
+            None => return,
+        };
         for &n in &[4, 16, 256, 1024, 4096, 8192, 16384] {
             let original = bb_test_data(n);
             let mut data = original.clone();
             gpu.forward_ntt(&mut data, &[]).unwrap();
-            assert_ne!(data, original, "V4 forward should change data at size {}", n);
+            assert_ne!(
+                data, original,
+                "V4 forward should change data at size {}",
+                n
+            );
             gpu.inverse_ntt(&mut data, &[]).unwrap();
             assert_eq!(data, original, "V4 round-trip failed at size {}", n);
         }
@@ -761,7 +985,10 @@ mod tests {
 
     #[test]
     fn test_edge_cases() {
-        let gpu = match init() { Some(g) => g, None => return };
+        let gpu = match init() {
+            Some(g) => g,
+            None => return,
+        };
         let mut data = vec![BabyBear::zero(); 64];
         gpu.forward_ntt(&mut data, &[]).unwrap();
         assert!(data.iter().all(|&x| x == BabyBear::zero()));
@@ -773,7 +1000,10 @@ mod tests {
 
     #[test]
     fn test_forward_odd_log_n() {
-        let gpu = match init() { Some(g) => g, None => return };
+        let gpu = match init() {
+            Some(g) => g,
+            None => return,
+        };
         let cpu = BbCpuReferenceBackend::new();
         // Odd log_n exercises radix-4 + final radix-2 fallback
         for &n in &[8, 32, 2048] {
@@ -788,7 +1018,10 @@ mod tests {
 
     #[test]
     fn test_roundtrip_odd_log_n() {
-        let gpu = match init() { Some(g) => g, None => return };
+        let gpu = match init() {
+            Some(g) => g,
+            None => return,
+        };
         for &n in &[8, 32, 2048, 32768] {
             let original = bb_test_data(n);
             let mut data = original.clone();

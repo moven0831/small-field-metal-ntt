@@ -67,7 +67,8 @@ pub fn assert_forward_matches_cpu(backend: &impl NttBackend<M31>, sizes: &[usize
         let mut gpu_data = original.clone();
         backend.forward_ntt(&mut gpu_data, &[]).unwrap();
         assert_eq!(
-            gpu_data, cpu_data,
+            gpu_data,
+            cpu_data,
             "{}: Forward mismatch at size {}",
             backend.name(),
             n,
@@ -82,14 +83,16 @@ pub fn assert_roundtrip(backend: &impl NttBackend<M31>, sizes: &[usize]) {
         let mut data = original.clone();
         backend.forward_ntt(&mut data, &[]).unwrap();
         assert_ne!(
-            data, original,
+            data,
+            original,
             "{}: Forward should change data at size {}",
             backend.name(),
             n,
         );
         backend.inverse_ntt(&mut data, &[]).unwrap();
         assert_eq!(
-            data, original,
+            data,
+            original,
             "{}: Round-trip failed at size {}",
             backend.name(),
             n,
@@ -102,7 +105,10 @@ pub fn assert_edge_cases(backend: &impl NttBackend<M31>) {
     // All zeros
     let mut data = vec![M31(0); 64];
     backend.forward_ntt(&mut data, &[]).unwrap();
-    assert!(data.iter().all(|&x| x == M31(0)), "NTT of zeros should be zeros");
+    assert!(
+        data.iter().all(|&x| x == M31(0)),
+        "NTT of zeros should be zeros"
+    );
 
     // Size 1 identity
     let mut data = vec![M31(42)];
@@ -111,11 +117,17 @@ pub fn assert_edge_cases(backend: &impl NttBackend<M31>) {
 
     // Invalid size
     let mut data = vec![M31(1); 3];
-    assert!(backend.forward_ntt(&mut data, &[]).is_err(), "Size 3 should fail");
+    assert!(
+        backend.forward_ntt(&mut data, &[]).is_err(),
+        "Size 3 should fail"
+    );
 
     // Empty
     let mut data: Vec<M31> = vec![];
-    assert!(backend.forward_ntt(&mut data, &[]).is_err(), "Empty should fail");
+    assert!(
+        backend.forward_ntt(&mut data, &[]).is_err(),
+        "Empty should fail"
+    );
 }
 
 /// Assert edge cases for inverse NTT.
@@ -127,11 +139,17 @@ pub fn assert_inverse_edge_cases(backend: &impl NttBackend<M31>) {
 
     // Invalid size
     let mut data = vec![M31(1); 3];
-    assert!(backend.inverse_ntt(&mut data, &[]).is_err(), "Inverse size 3 should fail");
+    assert!(
+        backend.inverse_ntt(&mut data, &[]).is_err(),
+        "Inverse size 3 should fail"
+    );
 
     // Empty
     let mut data: Vec<M31> = vec![];
-    assert!(backend.inverse_ntt(&mut data, &[]).is_err(), "Inverse empty should fail");
+    assert!(
+        backend.inverse_ntt(&mut data, &[]).is_err(),
+        "Inverse empty should fail"
+    );
 }
 
 /// Assert pointwise multiplication works correctly.

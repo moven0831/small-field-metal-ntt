@@ -66,8 +66,13 @@ fn test_cpu_write_gpu_read_cpu_readback() {
     let threadgroups = metal::MTLSize::new((n as u64 + threads_per - 1) / threads_per, 1, 1);
     let threads_per_group = metal::MTLSize::new(threads_per, 1, 1);
 
-    ctx.dispatch_and_wait(&pipeline, &[&data_buf, &params], threadgroups, threads_per_group)
-        .unwrap();
+    ctx.dispatch_and_wait(
+        &pipeline,
+        &[&data_buf, &params],
+        threadgroups,
+        threads_per_group,
+    )
+    .unwrap();
 
     // CPU reads back and verifies
     let result = MetalContext::read_buffer(&data_buf, n);
@@ -103,8 +108,13 @@ fn test_gpu_write_cpu_read() {
     let threadgroups = metal::MTLSize::new((n as u64 + threads_per - 1) / threads_per, 1, 1);
     let threads_per_group = metal::MTLSize::new(threads_per, 1, 1);
 
-    ctx.dispatch_and_wait(&pipeline, &[&data_buf, &params], threadgroups, threads_per_group)
-        .unwrap();
+    ctx.dispatch_and_wait(
+        &pipeline,
+        &[&data_buf, &params],
+        threadgroups,
+        threads_per_group,
+    )
+    .unwrap();
 
     // CPU reads back GPU-written data
     let result = MetalContext::read_buffer(&data_buf, n);
@@ -141,8 +151,13 @@ fn test_small_buffer_coherency() {
     let threadgroups = metal::MTLSize::new(1, 1, 1);
     let threads_per_group = metal::MTLSize::new(n as u64, 1, 1);
 
-    ctx.dispatch_and_wait(&pipeline, &[&data_buf, &params], threadgroups, threads_per_group)
-        .unwrap();
+    ctx.dispatch_and_wait(
+        &pipeline,
+        &[&data_buf, &params],
+        threadgroups,
+        threads_per_group,
+    )
+    .unwrap();
 
     let result = MetalContext::read_buffer(&data_buf, n);
     let expected: Vec<u32> = input.iter().map(|v| v ^ xor_val).collect();

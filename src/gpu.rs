@@ -93,10 +93,9 @@ impl MetalContext {
         if byte_len == 0 {
             return Err(NttError::BufferAllocFailed { requested_bytes: 0 });
         }
-        let buffer = self.device.new_buffer(
-            byte_len as u64,
-            MTLResourceOptions::StorageModeShared,
-        );
+        let buffer = self
+            .device
+            .new_buffer(byte_len as u64, MTLResourceOptions::StorageModeShared);
         Ok(buffer)
     }
 
@@ -394,12 +393,7 @@ impl MetalContext {
         let max_tpg = Self::max_threads_per_threadgroup(pipeline) as u64;
         let (tg, tpg) = Self::compute_grid_1d(num_butterflies, max_tpg.min(256));
 
-        self.dispatch_and_wait(
-            pipeline,
-            &[buf_data, &buf_tw_o, &buf_tw_i, &buf_p],
-            tg,
-            tpg,
-        )
+        self.dispatch_and_wait(pipeline, &[buf_data, &buf_tw_o, &buf_tw_i, &buf_p], tg, tpg)
     }
 
     /// Dispatch the normalization kernel (multiply all elements by inv_n).

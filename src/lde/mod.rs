@@ -214,7 +214,9 @@ mod tests {
 
         let input = test_data(1 << log_n, batch_size);
         let cpu_result = coset_lde_batch_cpu(&input, log_n, batch_size, added_bits);
-        let gpu_result = gpu_lde.execute(&input, log_n, batch_size, added_bits).unwrap();
+        let gpu_result = gpu_lde
+            .execute(&input, log_n, batch_size, added_bits)
+            .unwrap();
 
         assert_eq!(
             gpu_result.data, cpu_result,
@@ -235,7 +237,9 @@ mod tests {
 
         let input = test_data(1 << log_n, batch_size);
         let cpu_result = coset_lde_batch_cpu(&input, log_n, batch_size, added_bits);
-        let gpu_result = gpu_lde.execute(&input, log_n, batch_size, added_bits).unwrap();
+        let gpu_result = gpu_lde
+            .execute(&input, log_n, batch_size, added_bits)
+            .unwrap();
 
         assert_eq!(
             gpu_result.data, cpu_result,
@@ -256,7 +260,9 @@ mod tests {
 
         let input = test_data(1 << log_n, batch_size);
         let cpu_result = coset_lde_batch_cpu(&input, log_n, batch_size, added_bits);
-        let gpu_result = gpu_lde.execute(&input, log_n, batch_size, added_bits).unwrap();
+        let gpu_result = gpu_lde
+            .execute(&input, log_n, batch_size, added_bits)
+            .unwrap();
 
         assert_eq!(
             gpu_result.data, cpu_result,

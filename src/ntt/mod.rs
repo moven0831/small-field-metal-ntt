@@ -69,7 +69,11 @@ pub enum NttError {
     /// GPU execution error.
     GpuExecutionError(String),
     /// Correctness check failed: GPU output != CPU reference.
-    CorrectnessMismatch { index: usize, expected: u32, got: u32 },
+    CorrectnessMismatch {
+        index: usize,
+        expected: u32,
+        got: u32,
+    },
 }
 
 impl std::fmt::Display for NttError {
@@ -77,12 +81,24 @@ impl std::fmt::Display for NttError {
         match self {
             NttError::InvalidSize(n) => write!(f, "Invalid NTT size: {} (must be power of 2)", n),
             NttError::DeviceNotFound => write!(f, "No Metal GPU device found"),
-            NttError::BufferAllocFailed { requested_bytes } =>
-                write!(f, "GPU buffer allocation failed ({} bytes requested)", requested_bytes),
-            NttError::ShaderCompileError(msg) => write!(f, "Metal shader compilation error: {}", msg),
+            NttError::BufferAllocFailed { requested_bytes } => write!(
+                f,
+                "GPU buffer allocation failed ({} bytes requested)",
+                requested_bytes
+            ),
+            NttError::ShaderCompileError(msg) => {
+                write!(f, "Metal shader compilation error: {}", msg)
+            }
             NttError::GpuExecutionError(msg) => write!(f, "GPU execution error: {}", msg),
-            NttError::CorrectnessMismatch { index, expected, got } =>
-                write!(f, "Correctness mismatch at index {}: expected {}, got {}", index, expected, got),
+            NttError::CorrectnessMismatch {
+                index,
+                expected,
+                got,
+            } => write!(
+                f,
+                "Correctness mismatch at index {}: expected {}, got {}",
+                index, expected, got
+            ),
         }
     }
 }

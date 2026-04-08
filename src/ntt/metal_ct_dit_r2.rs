@@ -14,8 +14,8 @@
 use crate::field::m31::M31;
 use crate::field::Field;
 use crate::gpu::MetalContext;
-use crate::ntt::{NttBackend, NttError};
 use crate::ntt::twiddles::TwiddleCache;
+use crate::ntt::{NttBackend, NttError};
 use metal::*;
 use std::path::Path;
 
@@ -39,7 +39,11 @@ impl MetalCtDitR2 {
 
     /// Run forward Circle NTT on GPU.
     /// Returns (result_data, total_gpu_time_ns).
-    pub fn forward_ntt_gpu(&self, input: &[u32], log_n: usize) -> Result<(Vec<u32>, u64), NttError> {
+    pub fn forward_ntt_gpu(
+        &self,
+        input: &[u32],
+        log_n: usize,
+    ) -> Result<(Vec<u32>, u64), NttError> {
         let n = input.len();
         if n != (1 << log_n) {
             return Err(NttError::InvalidSize(n));
@@ -127,13 +131,19 @@ mod tests {
 
     #[test]
     fn test_forward_matches_cpu() {
-        let gpu = match init() { Some(g) => g, None => return };
+        let gpu = match init() {
+            Some(g) => g,
+            None => return,
+        };
         assert_forward_matches_cpu(&gpu, &[4, 16, 256, 1024, 4096]);
     }
 
     #[test]
     fn test_forward_edge_cases() {
-        let gpu = match init() { Some(g) => g, None => return };
+        let gpu = match init() {
+            Some(g) => g,
+            None => return,
+        };
         // V1 is forward-only (inverse is todo!()), so only test forward edge cases
         assert_edge_cases(&gpu);
     }

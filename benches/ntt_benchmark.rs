@@ -26,12 +26,12 @@ use std::time::Instant;
 const WARMUP: usize = 5;
 const ITERATIONS: usize = 20;
 const SIZES: &[usize] = &[
-    1 << 10,  // 1K
-    1 << 12,  // 4K
-    1 << 14,  // 16K
-    1 << 16,  // 64K
-    1 << 18,  // 256K
-    1 << 20,  // 1M
+    1 << 10, // 1K
+    1 << 12, // 4K
+    1 << 14, // 16K
+    1 << 16, // 64K
+    1 << 18, // 256K
+    1 << 20, // 1M
 ];
 
 // Cooperative sweep: more iterations for statistical significance.
@@ -39,11 +39,11 @@ const SIZES: &[usize] = &[
 const COOP_WARMUP: usize = 5;
 const COOP_ITERATIONS: usize = 20;
 const COOP_SIZES: &[usize] = &[
-    1 << 10,  // 1K
-    1 << 14,  // 16K
-    1 << 16,  // 64K
-    1 << 18,  // 256K
-    1 << 20,  // 1M
+    1 << 10, // 1K
+    1 << 14, // 16K
+    1 << 16, // 64K
+    1 << 18, // 256K
+    1 << 20, // 1M
 ];
 
 fn shader_dir() -> PathBuf {
@@ -99,7 +99,11 @@ fn bench_variant<F: Field>(
     let mean = times.iter().sum::<f64>() / n as f64;
     let variance = times.iter().map(|t| (t - mean).powi(2)).sum::<f64>() / n as f64;
     let stddev = variance.sqrt();
-    let cv = if mean > 0.0 { stddev / mean * 100.0 } else { 0.0 };
+    let cv = if mean > 0.0 {
+        stddev / mean * 100.0
+    } else {
+        0.0
+    };
     let throughput = (size as f64) / (median / 1_000_000.0) / 1_000_000.0; // Melem/s
 
     BenchResult {
@@ -201,26 +205,85 @@ fn run_algorithm_shootout() {
     for &size in SIZES {
         let data = lcg_data(size, 12345 + size as u64);
 
-        eprintln!("Benchmarking size 2^{} ({} elements)...", size.trailing_zeros(), size);
+        eprintln!(
+            "Benchmarking size 2^{} ({} elements)...",
+            size.trailing_zeros(),
+            size
+        );
 
         let r = bench_variant("cpu-reference", &cpu, &data, size);
-        println!("{},{},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1}", r.variant, r.size, r.median_us, r.min_us, r.max_us, r.stddev_us, r.p95_us, r.cv_pct, r.throughput_melem_s);
+        println!(
+            "{},{},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1}",
+            r.variant,
+            r.size,
+            r.median_us,
+            r.min_us,
+            r.max_us,
+            r.stddev_us,
+            r.p95_us,
+            r.cv_pct,
+            r.throughput_melem_s
+        );
         all_results.push(r);
 
         let r = bench_variant("v1-ct-dit-r2", &v1, &data, size);
-        println!("{},{},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1}", r.variant, r.size, r.median_us, r.min_us, r.max_us, r.stddev_us, r.p95_us, r.cv_pct, r.throughput_melem_s);
+        println!(
+            "{},{},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1}",
+            r.variant,
+            r.size,
+            r.median_us,
+            r.min_us,
+            r.max_us,
+            r.stddev_us,
+            r.p95_us,
+            r.cv_pct,
+            r.throughput_melem_s
+        );
         all_results.push(r);
 
         let r = bench_variant("v2-ct-gs-r2", &v2, &data, size);
-        println!("{},{},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1}", r.variant, r.size, r.median_us, r.min_us, r.max_us, r.stddev_us, r.p95_us, r.cv_pct, r.throughput_melem_s);
+        println!(
+            "{},{},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1}",
+            r.variant,
+            r.size,
+            r.median_us,
+            r.min_us,
+            r.max_us,
+            r.stddev_us,
+            r.p95_us,
+            r.cv_pct,
+            r.throughput_melem_s
+        );
         all_results.push(r);
 
         let r = bench_variant("v3-stockham-r2", &v3, &data, size);
-        println!("{},{},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1}", r.variant, r.size, r.median_us, r.min_us, r.max_us, r.stddev_us, r.p95_us, r.cv_pct, r.throughput_melem_s);
+        println!(
+            "{},{},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1}",
+            r.variant,
+            r.size,
+            r.median_us,
+            r.min_us,
+            r.max_us,
+            r.stddev_us,
+            r.p95_us,
+            r.cv_pct,
+            r.throughput_melem_s
+        );
         all_results.push(r);
 
         let r = bench_variant("v4-ct-gs-r4", &v4, &data, size);
-        println!("{},{},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1}", r.variant, r.size, r.median_us, r.min_us, r.max_us, r.stddev_us, r.p95_us, r.cv_pct, r.throughput_melem_s);
+        println!(
+            "{},{},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1}",
+            r.variant,
+            r.size,
+            r.median_us,
+            r.min_us,
+            r.max_us,
+            r.stddev_us,
+            r.p95_us,
+            r.cv_pct,
+            r.throughput_melem_s
+        );
         all_results.push(r);
     }
 
@@ -233,13 +296,28 @@ fn run_algorithm_shootout() {
     eprintln!("║              ║ (us)   ║ (us)   ║ (us)   ║ (us)   ║ (us)   ║ (us)        ║");
     eprintln!("╠══════════════╬════════╬════════╬════════╬════════╬════════╬══════════════╣");
 
-    let variants = ["cpu-reference", "v1-ct-dit-r2", "v2-ct-gs-r2", "v3-stockham-r2", "v4-ct-gs-r4"];
-    let labels = ["CPU ref    ", "V1 CT-DIT  ", "V2 CT-GS r2", "V3 Stockham", "V4 CT-GS r4"];
+    let variants = [
+        "cpu-reference",
+        "v1-ct-dit-r2",
+        "v2-ct-gs-r2",
+        "v3-stockham-r2",
+        "v4-ct-gs-r4",
+    ];
+    let labels = [
+        "CPU ref    ",
+        "V1 CT-DIT  ",
+        "V2 CT-GS r2",
+        "V3 Stockham",
+        "V4 CT-GS r4",
+    ];
 
     for (vi, variant) in variants.iter().enumerate() {
         let mut row = format!("║ {} ║", labels[vi]);
         for &size in SIZES {
-            if let Some(r) = all_results.iter().find(|r| r.variant == *variant && r.size == size) {
+            if let Some(r) = all_results
+                .iter()
+                .find(|r| r.variant == *variant && r.size == size)
+            {
                 row.push_str(&format!(" {:>6.0} ║", r.median_us));
             } else {
                 row.push_str("    N/A ║");
@@ -255,25 +333,45 @@ fn run_algorithm_shootout() {
         .iter()
         .filter(|r| r.size == *largest && r.variant != "cpu-reference")
         .collect();
-    if let Some(winner) = gpu_results.iter().min_by(|a, b| a.median_us.partial_cmp(&b.median_us).unwrap()) {
+    if let Some(winner) = gpu_results
+        .iter()
+        .min_by(|a, b| a.median_us.partial_cmp(&b.median_us).unwrap())
+    {
         eprintln!();
-        eprintln!("Winner at 2^{}: {} ({:.0} us, {:.1} Melem/s)",
-            largest.trailing_zeros(), winner.variant, winner.median_us, winner.throughput_melem_s);
+        eprintln!(
+            "Winner at 2^{}: {} ({:.0} us, {:.1} Melem/s)",
+            largest.trailing_zeros(),
+            winner.variant,
+            winner.median_us,
+            winner.throughput_melem_s
+        );
     }
 
     // Warn about noisy measurements (CV > 10%)
     let noisy: Vec<&BenchResult> = all_results.iter().filter(|r| r.cv_pct > 10.0).collect();
     if !noisy.is_empty() {
         eprintln!();
-        eprintln!("Warning: {} measurement(s) with CV > 10% (noisy):", noisy.len());
+        eprintln!(
+            "Warning: {} measurement(s) with CV > 10% (noisy):",
+            noisy.len()
+        );
         for r in &noisy {
-            eprintln!("  {} at 2^{}: CV={:.1}% (stddev={:.1}us, median={:.1}us)",
-                r.variant, r.size.trailing_zeros(), r.cv_pct, r.stddev_us, r.median_us);
+            eprintln!(
+                "  {} at 2^{}: CV={:.1}% (stddev={:.1}us, median={:.1}us)",
+                r.variant,
+                r.size.trailing_zeros(),
+                r.cv_pct,
+                r.stddev_us,
+                r.median_us
+            );
         }
     }
 
     eprintln!();
-    eprintln!("Config: {} warmup + {} iterations per (variant, size) pair", WARMUP, ITERATIONS);
+    eprintln!(
+        "Config: {} warmup + {} iterations per (variant, size) pair",
+        WARMUP, ITERATIONS
+    );
 }
 
 fn run_cooperative_sweep() {
@@ -294,29 +392,50 @@ fn run_cooperative_sweep() {
         let log_n = size.trailing_zeros() as usize;
         let input = lcg_data_u32(size, 12345 + size as u64);
 
-        eprintln!("Cooperative sweep: size 2^{} ({} elements), {} split values...",
-            log_n, size, log_n + 1);
+        eprintln!(
+            "Cooperative sweep: size 2^{} ({} elements), {} split values...",
+            log_n,
+            size,
+            log_n + 1
+        );
 
         let mut results: Vec<CoopBenchResult> = Vec::new();
         for split in 0..=log_n {
             let r = bench_cooperative(&coop, &input, log_n, split);
-            println!("{},{},{},{:.1},{:.1},{:.1},{:.1},{:.1}",
-                r.size, r.log_n, r.split_layer,
-                r.median_total_us, r.median_cpu_us, r.median_gpu_us,
-                r.min_total_us, r.max_total_us);
+            println!(
+                "{},{},{},{:.1},{:.1},{:.1},{:.1},{:.1}",
+                r.size,
+                r.log_n,
+                r.split_layer,
+                r.median_total_us,
+                r.median_cpu_us,
+                r.median_gpu_us,
+                r.min_total_us,
+                r.max_total_us
+            );
             results.push(r);
         }
 
         // Find optimal split from already-measured results
-        let best = results.iter()
+        let best = results
+            .iter()
             .min_by(|a, b| a.median_total_us.partial_cmp(&b.median_total_us).unwrap())
             .unwrap();
-        eprintln!("  Optimal split for 2^{}: {} (CPU does {} layers, GPU does {}) = {:.0} us",
-            log_n, best.split_layer, best.split_layer, log_n - best.split_layer, best.median_total_us);
+        eprintln!(
+            "  Optimal split for 2^{}: {} (CPU does {} layers, GPU does {}) = {:.0} us",
+            log_n,
+            best.split_layer,
+            best.split_layer,
+            log_n - best.split_layer,
+            best.median_total_us
+        );
     }
 
     eprintln!();
-    eprintln!("Config: {} warmup + {} iterations per (size, split) pair", COOP_WARMUP, COOP_ITERATIONS);
+    eprintln!(
+        "Config: {} warmup + {} iterations per (size, split) pair",
+        COOP_WARMUP, COOP_ITERATIONS
+    );
 }
 
 // ─── Coset LDE Benchmark ────────────────────────────────────────────────
@@ -333,14 +452,16 @@ fn run_coset_lde_benchmark() {
     eprintln!("GPU: {}", info);
     eprintln!();
 
-    println!("mode,n,batch_size,expansion,median_ms,min_ms,max_ms,stddev_ms,cv_pct,throughput_melem_s");
+    println!(
+        "mode,n,batch_size,expansion,median_ms,min_ms,max_ms,stddev_ms,cv_pct,throughput_melem_s"
+    );
 
     let configs: &[(usize, usize, usize)] = &[
         // (log_n, batch_size, added_bits)
-        (16, 256, 1),   // warmup: smaller size
-        (18, 256, 1),   // medium
-        (20, 256, 1),   // target: matches zk-autoresearch (2x expansion)
-        (20, 256, 2),   // 4x expansion
+        (16, 256, 1), // warmup: smaller size
+        (18, 256, 1), // medium
+        (20, 256, 1), // target: matches zk-autoresearch (2x expansion)
+        (20, 256, 2), // 4x expansion
     ];
 
     for &(log_n, batch_size, added_bits) in configs {
@@ -350,7 +471,9 @@ fn run_coset_lde_benchmark() {
 
         eprintln!(
             "Coset LDE: 2^{} x {} cols, {}x expansion (output: {} Melems, {:.0} MB)...",
-            log_n, batch_size, expansion,
+            log_n,
+            batch_size,
+            expansion,
             n_ext * batch_size / 1_000_000,
             (n_ext * batch_size * 4) as f64 / (1024.0 * 1024.0),
         );
@@ -369,7 +492,8 @@ fn run_coset_lde_benchmark() {
         let mut times_ms = Vec::with_capacity(WARMUP + ITERATIONS);
 
         for i in 0..(WARMUP + ITERATIONS) {
-            let result = lde.execute(&input, log_n, batch_size, added_bits)
+            let result = lde
+                .execute(&input, log_n, batch_size, added_bits)
                 .expect("LDE execution failed");
             if i >= WARMUP {
                 times_ms.push(result.total_ns as f64 / 1_000_000.0);
@@ -384,7 +508,11 @@ fn run_coset_lde_benchmark() {
         let mean = times_ms.iter().sum::<f64>() / nm as f64;
         let variance = times_ms.iter().map(|t| (t - mean).powi(2)).sum::<f64>() / nm as f64;
         let stddev = variance.sqrt();
-        let cv = if mean > 0.0 { stddev / mean * 100.0 } else { 0.0 };
+        let cv = if mean > 0.0 {
+            stddev / mean * 100.0
+        } else {
+            0.0
+        };
         let output_elems = (n_ext * batch_size) as f64;
         let throughput = output_elems / (median / 1000.0) / 1_000_000.0; // Melem/s
 
@@ -435,7 +563,7 @@ fn run_batch_ntt_benchmark() {
         (16, 256),
         (18, 256),
         (20, 256),
-        (20, 1),    // single NTT for comparison
+        (20, 1), // single NTT for comparison
     ];
 
     for &(log_n, batch_size) in configs {
@@ -444,7 +572,9 @@ fn run_batch_ntt_benchmark() {
 
         eprintln!(
             "Batch NTT: 2^{} x {} cols ({} Melems)...",
-            log_n, batch_size, total_elems / 1_000_000,
+            log_n,
+            batch_size,
+            total_elems / 1_000_000,
         );
 
         let input: Vec<u32> = {
@@ -497,9 +627,9 @@ fn run_bb_shootout() {
     use small_field_metal_ntt::field::babybear::BabyBear;
     use small_field_metal_ntt::ntt::bb_cpu_reference::BbCpuReferenceBackend;
     use small_field_metal_ntt::ntt::bb_metal_ct_dit_r2::BbMetalCtDitR2;
+    use small_field_metal_ntt::ntt::bb_metal_ct_gs_r4::BbMetalCtGsR4;
     use small_field_metal_ntt::ntt::bb_metal_r2::BbMetalR2;
     use small_field_metal_ntt::ntt::bb_metal_stockham_r2::BbMetalStockhamR2;
-    use small_field_metal_ntt::ntt::bb_metal_ct_gs_r4::BbMetalCtGsR4;
 
     let dir = shader_dir();
 
@@ -522,32 +652,93 @@ fn run_bb_shootout() {
     for &size in SIZES {
         let data: Vec<BabyBear> = {
             let mut seed: u64 = 12345 + size as u64;
-            (0..size).map(|_| {
-                seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
-                BabyBear::to_monty(((seed >> 33) as u32) % BabyBear::P)
-            }).collect()
+            (0..size)
+                .map(|_| {
+                    seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+                    BabyBear::to_monty(((seed >> 33) as u32) % BabyBear::P)
+                })
+                .collect()
         };
 
-        eprintln!("BB Shootout: size 2^{} ({} elements)...", size.trailing_zeros(), size);
+        eprintln!(
+            "BB Shootout: size 2^{} ({} elements)...",
+            size.trailing_zeros(),
+            size
+        );
 
         let r = bench_variant("bb-cpu-ref", &cpu, &data, size);
-        println!("{},{},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1}", r.variant, r.size, r.median_us, r.min_us, r.max_us, r.stddev_us, r.p95_us, r.cv_pct, r.throughput_melem_s);
+        println!(
+            "{},{},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1}",
+            r.variant,
+            r.size,
+            r.median_us,
+            r.min_us,
+            r.max_us,
+            r.stddev_us,
+            r.p95_us,
+            r.cv_pct,
+            r.throughput_melem_s
+        );
         all_results.push(r);
 
         let r = bench_variant("bb-v1-ct-dit-r2", &v1, &data, size);
-        println!("{},{},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1}", r.variant, r.size, r.median_us, r.min_us, r.max_us, r.stddev_us, r.p95_us, r.cv_pct, r.throughput_melem_s);
+        println!(
+            "{},{},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1}",
+            r.variant,
+            r.size,
+            r.median_us,
+            r.min_us,
+            r.max_us,
+            r.stddev_us,
+            r.p95_us,
+            r.cv_pct,
+            r.throughput_melem_s
+        );
         all_results.push(r);
 
         let r = bench_variant("bb-v2-ct-gs-r2", &v2, &data, size);
-        println!("{},{},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1}", r.variant, r.size, r.median_us, r.min_us, r.max_us, r.stddev_us, r.p95_us, r.cv_pct, r.throughput_melem_s);
+        println!(
+            "{},{},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1}",
+            r.variant,
+            r.size,
+            r.median_us,
+            r.min_us,
+            r.max_us,
+            r.stddev_us,
+            r.p95_us,
+            r.cv_pct,
+            r.throughput_melem_s
+        );
         all_results.push(r);
 
         let r = bench_variant("bb-v3-stockham-r2", &v3, &data, size);
-        println!("{},{},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1}", r.variant, r.size, r.median_us, r.min_us, r.max_us, r.stddev_us, r.p95_us, r.cv_pct, r.throughput_melem_s);
+        println!(
+            "{},{},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1}",
+            r.variant,
+            r.size,
+            r.median_us,
+            r.min_us,
+            r.max_us,
+            r.stddev_us,
+            r.p95_us,
+            r.cv_pct,
+            r.throughput_melem_s
+        );
         all_results.push(r);
 
         let r = bench_variant("bb-v4-ct-gs-r4", &v4, &data, size);
-        println!("{},{},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1}", r.variant, r.size, r.median_us, r.min_us, r.max_us, r.stddev_us, r.p95_us, r.cv_pct, r.throughput_melem_s);
+        println!(
+            "{},{},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1},{:.1}",
+            r.variant,
+            r.size,
+            r.median_us,
+            r.min_us,
+            r.max_us,
+            r.stddev_us,
+            r.p95_us,
+            r.cv_pct,
+            r.throughput_melem_s
+        );
         all_results.push(r);
     }
 
@@ -560,13 +751,28 @@ fn run_bb_shootout() {
     eprintln!("║                ║ (us)   ║ (us)   ║ (us)   ║ (us)   ║ (us)   ║ (us)           ║");
     eprintln!("╠════════════════╬════════╬════════╬════════╬════════╬════════╬═════════════════╣");
 
-    let variants = ["bb-cpu-ref", "bb-v1-ct-dit-r2", "bb-v2-ct-gs-r2", "bb-v3-stockham-r2", "bb-v4-ct-gs-r4"];
-    let labels = ["CPU ref      ", "V1 CT-DIT    ", "V2 CT-GS r2  ", "V3 Stockham  ", "V4 CT-GS r4  "];
+    let variants = [
+        "bb-cpu-ref",
+        "bb-v1-ct-dit-r2",
+        "bb-v2-ct-gs-r2",
+        "bb-v3-stockham-r2",
+        "bb-v4-ct-gs-r4",
+    ];
+    let labels = [
+        "CPU ref      ",
+        "V1 CT-DIT    ",
+        "V2 CT-GS r2  ",
+        "V3 Stockham  ",
+        "V4 CT-GS r4  ",
+    ];
 
     for (vi, variant) in variants.iter().enumerate() {
         let mut row = format!("║ {} ║", labels[vi]);
         for &size in SIZES {
-            if let Some(r) = all_results.iter().find(|r| r.variant == *variant && r.size == size) {
+            if let Some(r) = all_results
+                .iter()
+                .find(|r| r.variant == *variant && r.size == size)
+            {
                 row.push_str(&format!(" {:>6.0} ║", r.median_us));
             } else {
                 row.push_str("    N/A ║");
@@ -582,14 +788,25 @@ fn run_bb_shootout() {
         .iter()
         .filter(|r| r.size == *largest && r.variant != "bb-cpu-ref")
         .collect();
-    if let Some(winner) = gpu_results.iter().min_by(|a, b| a.median_us.partial_cmp(&b.median_us).unwrap()) {
+    if let Some(winner) = gpu_results
+        .iter()
+        .min_by(|a, b| a.median_us.partial_cmp(&b.median_us).unwrap())
+    {
         eprintln!();
-        eprintln!("Winner at 2^{}: {} ({:.0} us, {:.1} Melem/s)",
-            largest.trailing_zeros(), winner.variant, winner.median_us, winner.throughput_melem_s);
+        eprintln!(
+            "Winner at 2^{}: {} ({:.0} us, {:.1} Melem/s)",
+            largest.trailing_zeros(),
+            winner.variant,
+            winner.median_us,
+            winner.throughput_melem_s
+        );
     }
 
     eprintln!();
-    eprintln!("Config: {} warmup + {} iterations per (variant, size) pair", WARMUP, ITERATIONS);
+    eprintln!(
+        "Config: {} warmup + {} iterations per (variant, size) pair",
+        WARMUP, ITERATIONS
+    );
 }
 
 fn main() {
