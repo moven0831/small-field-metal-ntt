@@ -33,7 +33,9 @@ impl BbBatchNtt {
         let batch_forward_tg = single.ctx().make_pipeline("bb_r2_batch_forward_tg")?;
         let batch_inverse_tg = single.ctx().make_pipeline("bb_r2_batch_inverse_tg")?;
         let batch_forward_dev = single.ctx().make_pipeline("bb_r2_batch_butterfly_device")?;
-        let batch_inverse_dev = single.ctx().make_pipeline("bb_r2_batch_butterfly_device_inv")?;
+        let batch_inverse_dev = single
+            .ctx()
+            .make_pipeline("bb_r2_batch_butterfly_device_inv")?;
         let batch_normalize = single.ctx().make_pipeline("bb_r2_batch_normalize")?;
 
         Ok(Self {
@@ -445,7 +447,12 @@ mod tests {
         let batch_size = 4;
 
         let columns: Vec<Vec<u32>> = (0..batch_size)
-            .map(|_col| bb_test_data(n).iter().map(|b| b.raw()).collect::<Vec<u32>>())
+            .map(|_col| {
+                bb_test_data(n)
+                    .iter()
+                    .map(|b| b.raw())
+                    .collect::<Vec<u32>>()
+            })
             .collect();
 
         let single_results: Vec<Vec<u32>> = columns

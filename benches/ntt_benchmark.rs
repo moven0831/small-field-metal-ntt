@@ -16,9 +16,9 @@ use small_field_metal_ntt::gpu::MetalContext;
 use small_field_metal_ntt::ntt::m31::cooperative::{self, CooperativeNttContext};
 use small_field_metal_ntt::ntt::m31::cpu_reference::CpuReferenceBackend;
 use small_field_metal_ntt::ntt::m31::metal_ct_dit_r2::MetalCtDitR2;
-use small_field_metal_ntt::ntt::metal_r2::MetalCtGsR2;
 use small_field_metal_ntt::ntt::m31::metal_ct_gs_r4::MetalCtGsR4;
 use small_field_metal_ntt::ntt::m31::metal_stockham_r2::MetalStockhamR2;
+use small_field_metal_ntt::ntt::metal_r2::MetalCtGsR2;
 use small_field_metal_ntt::ntt::NttBackend;
 use std::path::PathBuf;
 use std::time::Instant;
@@ -625,10 +625,10 @@ fn run_batch_ntt_benchmark() {
 
 fn run_bb_shootout() {
     use small_field_metal_ntt::field::babybear::BabyBear;
+    use small_field_metal_ntt::ntt::babybear::batch::BbBatchNtt;
     use small_field_metal_ntt::ntt::babybear::cpu_reference::BbCpuReferenceBackend;
     use small_field_metal_ntt::ntt::babybear::metal_ct_dit_r2::BbMetalCtDitR2;
     use small_field_metal_ntt::ntt::babybear::metal_ct_gs_r4::BbMetalCtGsR4;
-    use small_field_metal_ntt::ntt::babybear::batch::BbBatchNtt;
     use small_field_metal_ntt::ntt::babybear::metal_stockham_r2::BbMetalStockhamR2;
 
     let dir = shader_dir();
