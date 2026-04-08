@@ -1,7 +1,8 @@
 //! CPU reference implementation of standard radix-2 NTT over BabyBear.
 //!
-//! Uses CT-DIT for forward and GS-DIF for inverse — same algorithm as the
-//! Metal GPU variant. Not optimized for performance; clarity is the priority.
+//! Uses GS-DIF for forward (natural input → bit-reversed output) and
+//! CT-DIT for inverse (bit-reversed input → natural output, normalized by 1/n).
+//! Same algorithm as the Metal GPU variants. Not optimized; clarity is the priority.
 
 use crate::field::babybear::BabyBear;
 use crate::field::Field;
@@ -20,6 +21,9 @@ impl BbCpuReferenceBackend {
     }
 
     /// Forward NTT on raw u32 data (Montgomery form).
+    ///
+    /// Uses GS-DIF: natural-order input → bit-reversed output.
+    /// Layers processed from large stride to small stride.
     pub fn forward_ntt_u32(&self, data: &mut [u32]) -> Result<(), NttError> {
         let n = data.len();
         if n == 0 || (n & (n - 1)) != 0 {
@@ -40,10 +44,10 @@ impl BbCpuReferenceBackend {
                 for j in 0..half {
                     let idx0 = block * full + j;
                     let idx1 = idx0 + half;
-                    let tmp = BabyBear(data[idx1]).mul(tw[j]);
                     let v0 = BabyBear(data[idx0]);
-                    data[idx0] = v0.add(tmp).0;
-                    data[idx1] = v0.sub(tmp).0;
+                    let v1 = BabyBear(data[idx1]);
+                    data[idx0] = v0.add(v1).0;
+                    data[idx1] = v0.sub(v1).mul(tw[j]).0;
                 }
             }
         }
@@ -51,6 +55,9 @@ impl BbCpuReferenceBackend {
     }
 
     /// Inverse NTT on raw u32 data (Montgomery form).
+    ///
+    /// Uses CT-DIT: bit-reversed input → natural-order output.
+    /// Layers processed from small stride to large stride.
     pub fn inverse_ntt_u32(&self, data: &mut [u32]) -> Result<(), NttError> {
         let n = data.len();
         if n == 0 || (n & (n - 1)) != 0 {
@@ -71,10 +78,10 @@ impl BbCpuReferenceBackend {
                 for j in 0..half {
                     let idx0 = block * full + j;
                     let idx1 = idx0 + half;
+                    let tmp = BabyBear(data[idx1]).mul(tw[j]);
                     let v0 = BabyBear(data[idx0]);
-                    let v1 = BabyBear(data[idx1]);
-                    data[idx0] = v0.add(v1).0;
-                    data[idx1] = v0.sub(v1).mul(tw[j]).0;
+                    data[idx0] = v0.add(tmp).0;
+                    data[idx1] = v0.sub(tmp).0;
                 }
             }
         }
@@ -104,6 +111,7 @@ impl NttBackend<BabyBear> for BbCpuReferenceBackend {
         let log_n = n.trailing_zeros() as usize;
         let twiddles = self.twiddle_cache.forward(log_n as u32);
 
+        // GS-DIF: natural input → bit-reversed output
         for layer in (0..log_n).rev() {
             let half = 1 << layer;
             let full = half << 1;
@@ -113,10 +121,10 @@ impl NttBackend<BabyBear> for BbCpuReferenceBackend {
                 for j in 0..half {
                     let idx0 = block * full + j;
                     let idx1 = idx0 + half;
-                    let tmp = data[idx1].mul(tw[j]);
                     let v0 = data[idx0];
-                    data[idx0] = v0.add(tmp);
-                    data[idx1] = v0.sub(tmp);
+                    let v1 = data[idx1];
+                    data[idx0] = v0.add(v1);
+                    data[idx1] = v0.sub(v1).mul(tw[j]);
                 }
             }
         }
@@ -134,6 +142,7 @@ impl NttBackend<BabyBear> for BbCpuReferenceBackend {
         let log_n = n.trailing_zeros() as usize;
         let itwiddles = self.twiddle_cache.inverse(log_n as u32);
 
+        // CT-DIT: bit-reversed input → natural output
         for layer in 0..log_n {
             let half = 1 << layer;
             let full = half << 1;
@@ -143,10 +152,10 @@ impl NttBackend<BabyBear> for BbCpuReferenceBackend {
                 for j in 0..half {
                     let idx0 = block * full + j;
                     let idx1 = idx0 + half;
+                    let tmp = data[idx1].mul(tw[j]);
                     let v0 = data[idx0];
-                    let v1 = data[idx1];
-                    data[idx0] = v0.add(v1);
-                    data[idx1] = v0.sub(v1).mul(tw[j]);
+                    data[idx0] = v0.add(tmp);
+                    data[idx1] = v0.sub(tmp);
                 }
             }
         }

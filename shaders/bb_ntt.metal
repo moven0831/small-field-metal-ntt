@@ -18,7 +18,7 @@
 
 #define BB_R2_MAX_TILE 8192
 
-// ─── Forward CT-DIT butterfly stages (threadgroup memory) ────────────────
+// ─── Forward GS-DIF butterfly stages (threadgroup memory) ────────────────
 //
 // Standard NTT twiddle layout: layer l has 2^l entries, indexed by position j.
 // Flat twiddles buffer: [layer start_layer entries, layer start_layer-1 entries, ...]
@@ -67,9 +67,8 @@ kernel void bb_r2_forward_tg(
             uint tw = twiddles[tw_off + j];
             uint a = tile[idx0];
             uint b = tile[idx1];
-            uint t = bb_mul(b, tw);
-            tile[idx0] = bb_add(a, t);
-            tile[idx1] = bb_sub(a, t);
+            tile[idx0] = bb_add(a, b);
+            tile[idx1] = bb_mul(bb_sub(a, b), tw);
         }
         threadgroup_barrier(mem_flags::mem_threadgroup);
     }
@@ -79,7 +78,7 @@ kernel void bb_r2_forward_tg(
     }
 }
 
-// ─── Inverse GS-DIF butterfly stages (threadgroup memory) ────────────────
+// ─── Inverse CT-DIT butterfly stages (threadgroup memory) ────────────────
 //
 // start_layer = lowest layer index (processes start_layer upward)
 kernel void bb_r2_inverse_tg(
@@ -119,8 +118,9 @@ kernel void bb_r2_inverse_tg(
             uint tw = twiddles[tw_off + j];
             uint a = tile[idx0];
             uint b = tile[idx1];
-            tile[idx0] = bb_add(a, b);
-            tile[idx1] = bb_mul(bb_sub(a, b), tw);
+            uint t = bb_mul(b, tw);
+            tile[idx0] = bb_add(a, t);
+            tile[idx1] = bb_sub(a, t);
         }
         threadgroup_barrier(mem_flags::mem_threadgroup);
     }
@@ -130,7 +130,7 @@ kernel void bb_r2_inverse_tg(
     }
 }
 
-// ─── Forward CT-DIT butterfly (device memory, single stage) ──────────────
+// ─── Forward GS-DIF butterfly (device memory, single stage) ──────────────
 //
 // Standard NTT: twiddle indexed by j (position within stride).
 // params[0] = stride, params[1] = n
@@ -153,12 +153,11 @@ kernel void bb_r2_butterfly_device(
     uint tw = twiddles[j];
     uint a = data[idx0];
     uint b = data[idx1];
-    uint t = bb_mul(b, tw);
-    data[idx0] = bb_add(a, t);
-    data[idx1] = bb_sub(a, t);
+    data[idx0] = bb_add(a, b);
+    data[idx1] = bb_mul(bb_sub(a, b), tw);
 }
 
-// ─── Inverse GS-DIF butterfly (device memory, single stage) ─────────────
+// ─── Inverse CT-DIT butterfly (device memory, single stage) ─────────────
 //
 // params[0] = stride, params[1] = n
 kernel void bb_r2_butterfly_device_inv(
@@ -180,8 +179,9 @@ kernel void bb_r2_butterfly_device_inv(
     uint tw = twiddles[j];
     uint a = data[idx0];
     uint b = data[idx1];
-    data[idx0] = bb_add(a, b);
-    data[idx1] = bb_mul(bb_sub(a, b), tw);
+    uint t = bb_mul(b, tw);
+    data[idx0] = bb_add(a, t);
+    data[idx1] = bb_sub(a, t);
 }
 
 // ─── Element-wise multiply by scalar (inverse NTT normalization) ─────────
@@ -202,7 +202,7 @@ kernel void bb_r2_normalize(
 // SoA layout: data[col * n + row]. Batch dimension = grid y (for 2D kernels)
 // or flattened into 1D grid (for threadgroup kernels).
 
-// Batched forward CT-DIT butterfly (device memory)
+// Batched forward GS-DIF butterfly (device memory)
 // params[0] = stride, params[1] = n, params[2] = batch_size
 kernel void bb_r2_batch_butterfly_device(
     device uint* data            [[buffer(0)]],
@@ -225,12 +225,11 @@ kernel void bb_r2_batch_butterfly_device(
     uint tw = twiddles[j];
     uint a = data[idx0];
     uint b = data[idx1];
-    uint t = bb_mul(b, tw);
-    data[idx0] = bb_add(a, t);
-    data[idx1] = bb_sub(a, t);
+    data[idx0] = bb_add(a, b);
+    data[idx1] = bb_mul(bb_sub(a, b), tw);
 }
 
-// Batched inverse GS-DIF butterfly (device memory)
+// Batched inverse CT-DIT butterfly (device memory)
 // params[0] = stride, params[1] = n, params[2] = batch_size
 kernel void bb_r2_batch_butterfly_device_inv(
     device uint* data            [[buffer(0)]],
@@ -253,11 +252,12 @@ kernel void bb_r2_batch_butterfly_device_inv(
     uint tw = twiddles[j];
     uint a = data[idx0];
     uint b = data[idx1];
-    data[idx0] = bb_add(a, b);
-    data[idx1] = bb_mul(bb_sub(a, b), tw);
+    uint t = bb_mul(b, tw);
+    data[idx0] = bb_add(a, t);
+    data[idx1] = bb_sub(a, t);
 }
 
-// Batched forward CT-DIT threadgroup kernel (1D grid, col computed from tg_id)
+// Batched forward GS-DIF threadgroup kernel (1D grid, col computed from tg_id)
 // params: [n, tile_log, num_layers, start_layer, num_tiles_per_col, tw_offsets...]
 kernel void bb_r2_batch_forward_tg(
     device uint* data              [[buffer(0)]],
@@ -302,9 +302,8 @@ kernel void bb_r2_batch_forward_tg(
             uint tw = twiddles[tw_off + j];
             uint a = tile[idx0];
             uint b = tile[idx1];
-            uint t = bb_mul(b, tw);
-            tile[idx0] = bb_add(a, t);
-            tile[idx1] = bb_sub(a, t);
+            tile[idx0] = bb_add(a, b);
+            tile[idx1] = bb_mul(bb_sub(a, b), tw);
         }
         threadgroup_barrier(mem_flags::mem_threadgroup);
     }
@@ -314,7 +313,7 @@ kernel void bb_r2_batch_forward_tg(
     }
 }
 
-// Batched inverse GS-DIF threadgroup kernel (1D grid)
+// Batched inverse CT-DIT threadgroup kernel (1D grid)
 // params: [n, tile_log, num_layers, start_layer, num_tiles_per_col, tw_offsets...]
 kernel void bb_r2_batch_inverse_tg(
     device uint* data              [[buffer(0)]],
@@ -359,8 +358,9 @@ kernel void bb_r2_batch_inverse_tg(
             uint tw = twiddles[tw_off + j];
             uint a = tile[idx0];
             uint b = tile[idx1];
-            tile[idx0] = bb_add(a, b);
-            tile[idx1] = bb_mul(bb_sub(a, b), tw);
+            uint t = bb_mul(b, tw);
+            tile[idx0] = bb_add(a, t);
+            tile[idx1] = bb_sub(a, t);
         }
         threadgroup_barrier(mem_flags::mem_threadgroup);
     }
@@ -464,7 +464,7 @@ kernel void bb_fused_normalize_zeropad_shift(
 
 #define BB_STOCKHAM_TILE_SIZE 4096
 
-// Stockham forward CT-DIT (threadgroup, ping-pong)
+// Stockham forward GS-DIF (threadgroup, ping-pong)
 // params: [tile_log, num_layers, start_layer, tw_offsets...]
 kernel void bb_stockham_r2_forward_tg(
     device const uint* input       [[buffer(0)]],
@@ -510,9 +510,8 @@ kernel void bb_stockham_r2_forward_tg(
             if (read_from_a) { a = tile_a[idx0]; b = tile_a[idx1]; }
             else             { a = tile_b[idx0]; b = tile_b[idx1]; }
 
-            uint t = bb_mul(b, tw);
-            uint out0 = bb_add(a, t);
-            uint out1 = bb_sub(a, t);
+            uint out0 = bb_add(a, b);
+            uint out1 = bb_mul(bb_sub(a, b), tw);
 
             if (read_from_a) { tile_b[idx0] = out0; tile_b[idx1] = out1; }
             else             { tile_a[idx0] = out0; tile_a[idx1] = out1; }
@@ -526,7 +525,7 @@ kernel void bb_stockham_r2_forward_tg(
     }
 }
 
-// Stockham forward CT-DIT (device memory, out-of-place)
+// Stockham forward GS-DIF (device memory, out-of-place)
 // params[0] = stride, params[1] = n
 kernel void bb_stockham_r2_butterfly_device(
     device const uint* input     [[buffer(0)]],
@@ -548,12 +547,11 @@ kernel void bb_stockham_r2_butterfly_device(
     uint tw = twiddles[j];
     uint a = input[idx0];
     uint b = input[idx1];
-    uint t = bb_mul(b, tw);
-    output[idx0] = bb_add(a, t);
-    output[idx1] = bb_sub(a, t);
+    output[idx0] = bb_add(a, b);
+    output[idx1] = bb_mul(bb_sub(a, b), tw);
 }
 
-// Stockham inverse GS-DIF (threadgroup, ping-pong)
+// Stockham inverse CT-DIT (threadgroup, ping-pong)
 // params: [tile_log, num_layers, start_layer, tw_offsets...]
 kernel void bb_stockham_r2_inverse_tg(
     device const uint* input       [[buffer(0)]],
@@ -599,8 +597,9 @@ kernel void bb_stockham_r2_inverse_tg(
             if (read_from_a) { a = tile_a[idx0]; b = tile_a[idx1]; }
             else             { a = tile_b[idx0]; b = tile_b[idx1]; }
 
-            uint out0 = bb_add(a, b);
-            uint out1 = bb_mul(bb_sub(a, b), tw);
+            uint t = bb_mul(b, tw);
+            uint out0 = bb_add(a, t);
+            uint out1 = bb_sub(a, t);
 
             if (read_from_a) { tile_b[idx0] = out0; tile_b[idx1] = out1; }
             else             { tile_a[idx0] = out0; tile_a[idx1] = out1; }
@@ -614,7 +613,7 @@ kernel void bb_stockham_r2_inverse_tg(
     }
 }
 
-// Stockham inverse GS-DIF (device memory, out-of-place)
+// Stockham inverse CT-DIT (device memory, out-of-place)
 // params[0] = stride, params[1] = n
 kernel void bb_stockham_r2_butterfly_device_inv(
     device const uint* input     [[buffer(0)]],
@@ -636,8 +635,9 @@ kernel void bb_stockham_r2_butterfly_device_inv(
     uint tw = twiddles[j];
     uint a = input[idx0];
     uint b = input[idx1];
-    output[idx0] = bb_add(a, b);
-    output[idx1] = bb_mul(bb_sub(a, b), tw);
+    uint t = bb_mul(b, tw);
+    output[idx0] = bb_add(a, t);
+    output[idx1] = bb_sub(a, t);
 }
 
 // Stockham normalize (in-place)
@@ -657,7 +657,7 @@ kernel void bb_stockham_r2_normalize(
 // V4: CT-GS Radix-4 NTT (two layers per dispatch)
 // ═══════════════════════════════════════════════════════════════════════
 
-// Radix-4 device forward butterfly (two layers k, k-1)
+// Radix-4 device forward butterfly (GS-DIF, two layers k, k-1)
 // Standard NTT: two distinct outer twiddles + one shared inner twiddle
 // Buffers: [data, twiddles_outer (layer k), twiddles_inner (layer k-1), params]
 // params: [outer, inner, n]
@@ -694,24 +694,20 @@ kernel void bb_r4_butterfly_device(
     // One shared inner twiddle (layer k-1)
     uint w1 = twiddles_inner[j];
 
-    // Stage 1: outer butterfly
-    uint t0 = bb_mul(a2, w2a);
-    uint t1 = bb_mul(a3, w2b);
-    uint b0 = bb_add(a0, t0);
-    uint b1 = bb_add(a1, t1);
-    uint b2 = bb_sub(a0, t0);
-    uint b3 = bb_sub(a1, t1);
+    // Stage 1: outer butterfly (GS-DIF, layer k)
+    uint s0 = bb_add(a0, a2);
+    uint s2 = bb_mul(bb_sub(a0, a2), w2a);
+    uint s1 = bb_add(a1, a3);
+    uint s3 = bb_mul(bb_sub(a1, a3), w2b);
 
-    // Stage 2: inner butterfly
-    uint t2 = bb_mul(b1, w1);
-    uint t3 = bb_mul(b3, w1);
-    data[idx0] = bb_add(b0, t2);
-    data[idx1] = bb_sub(b0, t2);
-    data[idx2] = bb_add(b2, t3);
-    data[idx3] = bb_sub(b2, t3);
+    // Stage 2: inner butterfly (GS-DIF, layer k-1)
+    data[idx0] = bb_add(s0, s1);
+    data[idx1] = bb_mul(bb_sub(s0, s1), w1);
+    data[idx2] = bb_add(s2, s3);
+    data[idx3] = bb_mul(bb_sub(s2, s3), w1);
 }
 
-// Radix-4 device inverse butterfly (GS-DIF, two layers k-1, k)
+// Radix-4 device inverse butterfly (CT-DIT, two layers k-1, k)
 // params: [outer, inner, n]
 kernel void bb_r4_butterfly_device_inv(
     device uint* data                [[buffer(0)]],
@@ -746,17 +742,21 @@ kernel void bb_r4_butterfly_device_inv(
     uint w2b = twiddles_outer[j + inner];
     uint w1 = twiddles_inner[j];
 
-    // Stage 1: undo inner (GS-DIF)
-    uint s0 = bb_add(a0, a1);
-    uint s1 = bb_mul(bb_sub(a0, a1), w1);
-    uint s2 = bb_add(a2, a3);
-    uint s3 = bb_mul(bb_sub(a2, a3), w1);
+    // Stage 1: inner butterfly (CT-DIT, layer k-1)
+    uint t0 = bb_mul(a1, w1);
+    uint t1 = bb_mul(a3, w1);
+    uint b0 = bb_add(a0, t0);
+    uint b1 = bb_sub(a0, t0);
+    uint b2 = bb_add(a2, t1);
+    uint b3 = bb_sub(a2, t1);
 
-    // Stage 2: undo outer (GS-DIF)
-    data[idx0] = bb_add(s0, s2);
-    data[idx1] = bb_add(s1, s3);
-    data[idx2] = bb_mul(bb_sub(s0, s2), w2a);
-    data[idx3] = bb_mul(bb_sub(s1, s3), w2b);
+    // Stage 2: outer butterfly (CT-DIT, layer k)
+    uint t2 = bb_mul(b2, w2a);
+    uint t3 = bb_mul(b3, w2b);
+    data[idx0] = bb_add(b0, t2);
+    data[idx1] = bb_add(b1, t3);
+    data[idx2] = bb_sub(b0, t2);
+    data[idx3] = bb_sub(b1, t3);
 }
 
 // Radix-2 fallback for odd log_n (forward, device memory)
@@ -779,9 +779,8 @@ kernel void bb_r4_butterfly_device_r2(
     uint tw = twiddles[j];
     uint a = data[idx0];
     uint b = data[idx1];
-    uint t = bb_mul(b, tw);
-    data[idx0] = bb_add(a, t);
-    data[idx1] = bb_sub(a, t);
+    data[idx0] = bb_add(a, b);
+    data[idx1] = bb_mul(bb_sub(a, b), tw);
 }
 
 // Radix-2 fallback (inverse, device memory)
@@ -803,8 +802,9 @@ kernel void bb_r4_r2_device_inv(
     uint tw = twiddles[j];
     uint a = data[idx0];
     uint b = data[idx1];
-    data[idx0] = bb_add(a, b);
-    data[idx1] = bb_mul(bb_sub(a, b), tw);
+    uint t = bb_mul(b, tw);
+    data[idx0] = bb_add(a, t);
+    data[idx1] = bb_sub(a, t);
 }
 
 // Radix-4 forward threadgroup kernel
@@ -861,19 +861,16 @@ kernel void bb_r4_forward_tg(
 
             uint a0 = tile[idx0], a1 = tile[idx1], a2 = tile[idx2], a3 = tile[idx3];
 
-            uint t0 = bb_mul(a2, w2a);
-            uint t1 = bb_mul(a3, w2b);
-            uint b0 = bb_add(a0, t0);
-            uint b1 = bb_add(a1, t1);
-            uint b2 = bb_sub(a0, t0);
-            uint b3 = bb_sub(a1, t1);
+            // GS-DIF radix-4: outer (layer k) then inner (layer k-1)
+            uint s0 = bb_add(a0, a2);
+            uint s2 = bb_mul(bb_sub(a0, a2), w2a);
+            uint s1 = bb_add(a1, a3);
+            uint s3 = bb_mul(bb_sub(a1, a3), w2b);
 
-            uint t2 = bb_mul(b1, w1);
-            uint t3 = bb_mul(b3, w1);
-            tile[idx0] = bb_add(b0, t2);
-            tile[idx1] = bb_sub(b0, t2);
-            tile[idx2] = bb_add(b2, t3);
-            tile[idx3] = bb_sub(b2, t3);
+            tile[idx0] = bb_add(s0, s1);
+            tile[idx1] = bb_mul(bb_sub(s0, s1), w1);
+            tile[idx2] = bb_add(s2, s3);
+            tile[idx3] = bb_mul(bb_sub(s2, s3), w1);
         }
         threadgroup_barrier(mem_flags::mem_threadgroup);
         layer -= 2;
@@ -888,9 +885,8 @@ kernel void bb_r4_forward_tg(
             uint tw = twiddles[tw_off]; // layer 0: stride=1, only twiddle[0]=1
             uint a = tile[idx0];
             uint b = tile[idx1];
-            uint t = bb_mul(b, tw);
-            tile[idx0] = bb_add(a, t);
-            tile[idx1] = bb_sub(a, t);
+            tile[idx0] = bb_add(a, b);
+            tile[idx1] = bb_mul(bb_sub(a, b), tw);
         }
         threadgroup_barrier(mem_flags::mem_threadgroup);
     }
@@ -900,7 +896,7 @@ kernel void bb_r4_forward_tg(
     }
 }
 
-// Radix-4 inverse threadgroup kernel (GS-DIF)
+// Radix-4 inverse threadgroup kernel (CT-DIT)
 // params: [n, tile_log, num_r4, has_initial_r2, tw_offsets...]
 kernel void bb_r4_inverse_tg(
     device uint* data              [[buffer(0)]],
@@ -928,7 +924,7 @@ kernel void bb_r4_inverse_tg(
     uint half_tile    = tile_size >> 1;
     uint tw_idx       = 4; // offset into params for tw_offsets
 
-    // Optional initial radix-2 stage (layer 0, GS-DIF)
+    // Optional initial radix-2 stage (layer 0, CT-DIT)
     if (has_initial_r2) {
         uint tw_off = params[tw_idx];
         tw_idx++;
@@ -938,13 +934,14 @@ kernel void bb_r4_inverse_tg(
             uint tw = twiddles[tw_off];
             uint a = tile[idx0];
             uint b = tile[idx1];
-            tile[idx0] = bb_add(a, b);
-            tile[idx1] = bb_mul(bb_sub(a, b), tw);
+            uint t = bb_mul(b, tw);
+            tile[idx0] = bb_add(a, t);
+            tile[idx1] = bb_sub(a, t);
         }
         threadgroup_barrier(mem_flags::mem_threadgroup);
     }
 
-    // Radix-4 stages (GS-DIF, pairs of layers, low to high)
+    // Radix-4 stages (CT-DIT, pairs of layers, low to high)
     uint layer = has_initial_r2 ? 1u : 0u;
     for (uint s = 0; s < num_r4; s++) {
         uint k = layer + 1; // outer layer
@@ -969,16 +966,20 @@ kernel void bb_r4_inverse_tg(
 
             uint a0 = tile[idx0], a1 = tile[idx1], a2 = tile[idx2], a3 = tile[idx3];
 
-            // GS-DIF inverse radix-4
-            uint s0 = bb_add(a0, a1);
-            uint s1 = bb_mul(bb_sub(a0, a1), w1);
-            uint s2 = bb_add(a2, a3);
-            uint s3 = bb_mul(bb_sub(a2, a3), w1);
+            // CT-DIT inverse radix-4: inner (layer k-1) then outer (layer k)
+            uint t0 = bb_mul(a1, w1);
+            uint t1 = bb_mul(a3, w1);
+            uint b0 = bb_add(a0, t0);
+            uint b1 = bb_sub(a0, t0);
+            uint b2 = bb_add(a2, t1);
+            uint b3 = bb_sub(a2, t1);
 
-            tile[idx0] = bb_add(s0, s2);
-            tile[idx1] = bb_add(s1, s3);
-            tile[idx2] = bb_mul(bb_sub(s0, s2), w2a);
-            tile[idx3] = bb_mul(bb_sub(s1, s3), w2b);
+            uint t2 = bb_mul(b2, w2a);
+            uint t3 = bb_mul(b3, w2b);
+            tile[idx0] = bb_add(b0, t2);
+            tile[idx1] = bb_add(b1, t3);
+            tile[idx2] = bb_sub(b0, t2);
+            tile[idx3] = bb_sub(b1, t3);
         }
         threadgroup_barrier(mem_flags::mem_threadgroup);
         layer += 2;
@@ -1006,7 +1007,7 @@ kernel void bb_r4_normalize(
 // SoA layout: data[col * n + row]. Batch via 2D grid (x=butterflies, y=col).
 // ═══════════════════════════════════════════════════════════════════════
 
-// Batched radix-4 forward device butterfly
+// Batched radix-4 forward device butterfly (GS-DIF)
 // params: [outer, inner, n, batch_size]
 kernel void bb_r4_batch_butterfly_device(
     device uint* data                 [[buffer(0)]],
@@ -1037,22 +1038,19 @@ kernel void bb_r4_batch_butterfly_device(
     uint w2b = twiddles_outer[j + inner];
     uint w1  = twiddles_inner[j];
 
-    uint t0 = bb_mul(a2, w2a);
-    uint t1 = bb_mul(a3, w2b);
-    uint b0 = bb_add(a0, t0);
-    uint b1 = bb_add(a1, t1);
-    uint b2 = bb_sub(a0, t0);
-    uint b3 = bb_sub(a1, t1);
+    // GS-DIF: outer (layer k) then inner (layer k-1)
+    uint s0 = bb_add(a0, a2);
+    uint s2 = bb_mul(bb_sub(a0, a2), w2a);
+    uint s1 = bb_add(a1, a3);
+    uint s3 = bb_mul(bb_sub(a1, a3), w2b);
 
-    uint t2 = bb_mul(b1, w1);
-    uint t3 = bb_mul(b3, w1);
-    data[idx0] = bb_add(b0, t2);
-    data[idx1] = bb_sub(b0, t2);
-    data[idx2] = bb_add(b2, t3);
-    data[idx3] = bb_sub(b2, t3);
+    data[idx0] = bb_add(s0, s1);
+    data[idx1] = bb_mul(bb_sub(s0, s1), w1);
+    data[idx2] = bb_add(s2, s3);
+    data[idx3] = bb_mul(bb_sub(s2, s3), w1);
 }
 
-// Batched radix-4 inverse device butterfly (GS-DIF)
+// Batched radix-4 inverse device butterfly (CT-DIT)
 // params: [outer, inner, n, batch_size]
 kernel void bb_r4_batch_butterfly_device_inv(
     device uint* data                 [[buffer(0)]],
@@ -1083,15 +1081,20 @@ kernel void bb_r4_batch_butterfly_device_inv(
     uint w2b = twiddles_outer[j + inner];
     uint w1  = twiddles_inner[j];
 
-    uint s0 = bb_add(a0, a1);
-    uint s1 = bb_mul(bb_sub(a0, a1), w1);
-    uint s2 = bb_add(a2, a3);
-    uint s3 = bb_mul(bb_sub(a2, a3), w1);
+    // CT-DIT: inner (layer k-1) then outer (layer k)
+    uint t0 = bb_mul(a1, w1);
+    uint t1 = bb_mul(a3, w1);
+    uint b0 = bb_add(a0, t0);
+    uint b1 = bb_sub(a0, t0);
+    uint b2 = bb_add(a2, t1);
+    uint b3 = bb_sub(a2, t1);
 
-    data[idx0] = bb_add(s0, s2);
-    data[idx1] = bb_add(s1, s3);
-    data[idx2] = bb_mul(bb_sub(s0, s2), w2a);
-    data[idx3] = bb_mul(bb_sub(s1, s3), w2b);
+    uint t2 = bb_mul(b2, w2a);
+    uint t3 = bb_mul(b3, w2b);
+    data[idx0] = bb_add(b0, t2);
+    data[idx1] = bb_add(b1, t3);
+    data[idx2] = bb_sub(b0, t2);
+    data[idx3] = bb_sub(b1, t3);
 }
 
 // Batched radix-2 fallback for odd device layers (forward)
@@ -1117,9 +1120,8 @@ kernel void bb_r4_batch_butterfly_device_r2(
     uint tw = twiddles[j];
     uint a = data[idx0];
     uint b = data[idx1];
-    uint t = bb_mul(b, tw);
-    data[idx0] = bb_add(a, t);
-    data[idx1] = bb_sub(a, t);
+    data[idx0] = bb_add(a, b);
+    data[idx1] = bb_mul(bb_sub(a, b), tw);
 }
 
 // Batched radix-2 fallback for odd device layers (inverse)
@@ -1145,8 +1147,9 @@ kernel void bb_r4_batch_r2_device_inv(
     uint tw = twiddles[j];
     uint a = data[idx0];
     uint b = data[idx1];
-    data[idx0] = bb_add(a, b);
-    data[idx1] = bb_mul(bb_sub(a, b), tw);
+    uint t = bb_mul(b, tw);
+    data[idx0] = bb_add(a, t);
+    data[idx1] = bb_sub(a, t);
 }
 
 // Batched radix-4 forward threadgroup kernel (1D grid, col from tg_id)
@@ -1204,19 +1207,16 @@ kernel void bb_r4_batch_forward_tg(
 
             uint a0 = tile[idx0], a1 = tile[idx1], a2 = tile[idx2], a3 = tile[idx3];
 
-            uint t0 = bb_mul(a2, w2a);
-            uint t1 = bb_mul(a3, w2b);
-            uint b0 = bb_add(a0, t0);
-            uint b1 = bb_add(a1, t1);
-            uint b2 = bb_sub(a0, t0);
-            uint b3 = bb_sub(a1, t1);
+            // GS-DIF radix-4: outer (layer k) then inner (layer k-1)
+            uint s0 = bb_add(a0, a2);
+            uint s2 = bb_mul(bb_sub(a0, a2), w2a);
+            uint s1 = bb_add(a1, a3);
+            uint s3 = bb_mul(bb_sub(a1, a3), w2b);
 
-            uint t2 = bb_mul(b1, w1);
-            uint t3 = bb_mul(b3, w1);
-            tile[idx0] = bb_add(b0, t2);
-            tile[idx1] = bb_sub(b0, t2);
-            tile[idx2] = bb_add(b2, t3);
-            tile[idx3] = bb_sub(b2, t3);
+            tile[idx0] = bb_add(s0, s1);
+            tile[idx1] = bb_mul(bb_sub(s0, s1), w1);
+            tile[idx2] = bb_add(s2, s3);
+            tile[idx3] = bb_mul(bb_sub(s2, s3), w1);
         }
         threadgroup_barrier(mem_flags::mem_threadgroup);
         layer -= 2;
@@ -1230,9 +1230,8 @@ kernel void bb_r4_batch_forward_tg(
             uint tw = twiddles[tw_off];
             uint a = tile[idx0];
             uint b = tile[idx1];
-            uint t = bb_mul(b, tw);
-            tile[idx0] = bb_add(a, t);
-            tile[idx1] = bb_sub(a, t);
+            tile[idx0] = bb_add(a, b);
+            tile[idx1] = bb_mul(bb_sub(a, b), tw);
         }
         threadgroup_barrier(mem_flags::mem_threadgroup);
     }
@@ -1242,7 +1241,7 @@ kernel void bb_r4_batch_forward_tg(
     }
 }
 
-// Batched radix-4 inverse threadgroup kernel (GS-DIF, 1D grid)
+// Batched radix-4 inverse threadgroup kernel (CT-DIT, 1D grid)
 // params: [n, tile_log, num_r4, has_initial_r2, num_tiles_per_col, tw_offsets...]
 kernel void bb_r4_batch_inverse_tg(
     device uint* data              [[buffer(0)]],
@@ -1284,8 +1283,9 @@ kernel void bb_r4_batch_inverse_tg(
             uint tw = twiddles[tw_off];
             uint a = tile[idx0];
             uint b = tile[idx1];
-            tile[idx0] = bb_add(a, b);
-            tile[idx1] = bb_mul(bb_sub(a, b), tw);
+            uint t = bb_mul(b, tw);
+            tile[idx0] = bb_add(a, t);
+            tile[idx1] = bb_sub(a, t);
         }
         threadgroup_barrier(mem_flags::mem_threadgroup);
     }
@@ -1314,15 +1314,20 @@ kernel void bb_r4_batch_inverse_tg(
 
             uint a0 = tile[idx0], a1 = tile[idx1], a2 = tile[idx2], a3 = tile[idx3];
 
-            uint s0 = bb_add(a0, a1);
-            uint s1 = bb_mul(bb_sub(a0, a1), w1);
-            uint s2 = bb_add(a2, a3);
-            uint s3 = bb_mul(bb_sub(a2, a3), w1);
+            // CT-DIT inverse radix-4: inner (layer k-1) then outer (layer k)
+            uint t0 = bb_mul(a1, w1);
+            uint t1 = bb_mul(a3, w1);
+            uint b0 = bb_add(a0, t0);
+            uint b1 = bb_sub(a0, t0);
+            uint b2 = bb_add(a2, t1);
+            uint b3 = bb_sub(a2, t1);
 
-            tile[idx0] = bb_add(s0, s2);
-            tile[idx1] = bb_add(s1, s3);
-            tile[idx2] = bb_mul(bb_sub(s0, s2), w2a);
-            tile[idx3] = bb_mul(bb_sub(s1, s3), w2b);
+            uint t2 = bb_mul(b2, w2a);
+            uint t3 = bb_mul(b3, w2b);
+            tile[idx0] = bb_add(b0, t2);
+            tile[idx1] = bb_add(b1, t3);
+            tile[idx2] = bb_sub(b0, t2);
+            tile[idx3] = bb_sub(b1, t3);
         }
         threadgroup_barrier(mem_flags::mem_threadgroup);
         layer += 2;
