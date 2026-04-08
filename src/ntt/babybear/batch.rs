@@ -179,6 +179,7 @@ impl BbBatchNtt {
 
     // ── Private batch encoding helpers ──────────────────────────────────
 
+    #[allow(clippy::too_many_arguments)]
     fn encode_batch_butterfly(
         &self,
         cmd: &CommandBufferRef,
@@ -212,6 +213,7 @@ impl BbBatchNtt {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn encode_batch_threadgroup_forward(
         &self,
         cmd: &CommandBufferRef,
@@ -264,6 +266,7 @@ impl BbBatchNtt {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn encode_batch_threadgroup_inverse(
         &self,
         cmd: &CommandBufferRef,

@@ -546,10 +546,10 @@ fn run_coset_lde_benchmark() {
 
 fn run_batch_ntt_benchmark() {
     use small_field_metal_ntt::field::babybear::BabyBear;
-    use small_field_metal_ntt::ntt::babybear::metal_r2::BbMetalR2;
+    use small_field_metal_ntt::ntt::babybear::batch::BbBatchNtt;
 
     let dir = shader_dir();
-    let gpu = BbMetalR2::new(&dir).expect("Failed to init BbMetalR2");
+    let gpu = BbBatchNtt::new(&dir).expect("Failed to init BbBatchNtt");
 
     let info = gpu.ctx().device_info();
     eprintln!("GPU: {}", info);
@@ -628,7 +628,7 @@ fn run_bb_shootout() {
     use small_field_metal_ntt::ntt::babybear::cpu_reference::BbCpuReferenceBackend;
     use small_field_metal_ntt::ntt::babybear::metal_ct_dit_r2::BbMetalCtDitR2;
     use small_field_metal_ntt::ntt::babybear::metal_ct_gs_r4::BbMetalCtGsR4;
-    use small_field_metal_ntt::ntt::babybear::metal_r2::BbMetalR2;
+    use small_field_metal_ntt::ntt::babybear::batch::BbBatchNtt;
     use small_field_metal_ntt::ntt::babybear::metal_stockham_r2::BbMetalStockhamR2;
 
     let dir = shader_dir();
@@ -641,7 +641,7 @@ fn run_bb_shootout() {
 
     let cpu = BbCpuReferenceBackend::new();
     let v1 = BbMetalCtDitR2::new(&dir).expect("Failed to init BB V1");
-    let v2 = BbMetalR2::new(&dir).expect("Failed to init BB V2");
+    let v2 = BbBatchNtt::new(&dir).expect("Failed to init BB V2");
     let v3 = BbMetalStockhamR2::new(&dir).expect("Failed to init BB V3");
     let v4 = BbMetalCtGsR4::new(&dir).expect("Failed to init BB V4");
 

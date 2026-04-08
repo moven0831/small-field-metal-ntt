@@ -188,7 +188,7 @@ mod bb_gpu_plonky3 {
     use super::*;
     use small_field_metal_ntt::ntt::babybear::metal_ct_dit_r2::BbMetalCtDitR2;
     use small_field_metal_ntt::ntt::babybear::metal_ct_gs_r4::BbMetalCtGsR4;
-    use small_field_metal_ntt::ntt::babybear::metal_r2::BbMetalR2;
+    use small_field_metal_ntt::ntt::babybear::batch::BbBatchNtt;
     use small_field_metal_ntt::ntt::babybear::metal_stockham_r2::BbMetalStockhamR2;
     use std::path::PathBuf;
 
@@ -252,7 +252,7 @@ mod bb_gpu_plonky3 {
 
     #[test]
     fn test_bb_v2_matches_plonky3() {
-        let gpu = match try_init(BbMetalR2::new) {
+        let gpu = match try_init(BbBatchNtt::new) {
             Some(g) => g,
             None => return,
         };

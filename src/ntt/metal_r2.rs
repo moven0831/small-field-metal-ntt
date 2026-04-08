@@ -23,7 +23,7 @@ const MAX_TILE_LOG: usize = 13;
 ///
 /// Type aliases for specific fields:
 /// - `MetalCtGsR2` = `MetalR2<M31R2Config>` (M31 Circle NTT)
-/// - `BbMetalR2` = `MetalR2<BbR2Config>` (BabyBear standard NTT)
+/// - `BbMetalR2` = `MetalR2<BbR2Config>` (BabyBear single-column NTT)
 pub struct MetalR2<C: R2ShaderConfig> {
     ctx: MetalContext,
     forward_tg_pipeline: ComputePipelineState,
@@ -336,8 +336,8 @@ impl<C: R2ShaderConfig> NttBackend<C::F> for MetalR2<C> {
 /// M31 Circle NTT, radix-2 in-place (CT-DIT forward / GS-DIF inverse).
 pub type MetalCtGsR2 = MetalR2<crate::ntt::shader_config::M31R2Config>;
 
-/// BabyBear standard NTT, radix-2 in-place.
-pub type BbMetalR2New = MetalR2<crate::ntt::shader_config::BbR2Config>;
+/// BabyBear standard NTT, radix-2 in-place (single-column only).
+pub type BbMetalR2 = MetalR2<crate::ntt::shader_config::BbR2Config>;
 
 #[cfg(test)]
 mod tests {
