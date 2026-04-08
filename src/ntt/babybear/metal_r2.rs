@@ -7,7 +7,7 @@
 use crate::field::babybear::BabyBear;
 use crate::field::Field;
 use crate::gpu::MetalContext;
-use crate::ntt::bb_twiddles::BbTwiddleCache;
+use crate::ntt::babybear::twiddles::BbTwiddleCache;
 use crate::ntt::{NttBackend, NttError};
 use metal::*;
 use std::path::Path;
@@ -73,7 +73,7 @@ impl BbMetalR2 {
             zero_pad_pipeline: zero_pad,
             coset_shift_pipeline: coset_shift,
             fused_norm_zeropad_shift_pipeline: fused_norm_zeropad_shift,
-            twiddle_cache: crate::ntt::bb_twiddles::new_bb_twiddle_cache(),
+            twiddle_cache: crate::ntt::babybear::twiddles::new_bb_twiddle_cache(),
         })
     }
 
@@ -884,7 +884,7 @@ impl NttBackend<BabyBear> for BbMetalR2 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ntt::bb_cpu_reference::BbCpuReferenceBackend;
+    use crate::ntt::babybear::cpu_reference::BbCpuReferenceBackend;
     use crate::ntt::test_utils::shader_dir;
 
     fn init() -> Option<BbMetalR2> {

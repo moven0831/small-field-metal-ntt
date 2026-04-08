@@ -9,7 +9,7 @@ use p3_field::PrimeField32;
 use small_field_metal_ntt::field::babybear::BabyBear;
 use small_field_metal_ntt::field::m31::M31;
 use small_field_metal_ntt::field::Field;
-use small_field_metal_ntt::ntt::bb_cpu_reference::BbCpuReferenceBackend;
+use small_field_metal_ntt::ntt::babybear::cpu_reference::BbCpuReferenceBackend;
 use small_field_metal_ntt::ntt::m31::cpu_reference::CpuReferenceBackend;
 use small_field_metal_ntt::ntt::NttBackend;
 
@@ -186,10 +186,10 @@ fn test_bb_inverse_ntt_matches_plonky3() {
 #[cfg(test)]
 mod bb_gpu_plonky3 {
     use super::*;
-    use small_field_metal_ntt::ntt::bb_metal_ct_dit_r2::BbMetalCtDitR2;
-    use small_field_metal_ntt::ntt::bb_metal_ct_gs_r4::BbMetalCtGsR4;
-    use small_field_metal_ntt::ntt::bb_metal_r2::BbMetalR2;
-    use small_field_metal_ntt::ntt::bb_metal_stockham_r2::BbMetalStockhamR2;
+    use small_field_metal_ntt::ntt::babybear::metal_ct_dit_r2::BbMetalCtDitR2;
+    use small_field_metal_ntt::ntt::babybear::metal_ct_gs_r4::BbMetalCtGsR4;
+    use small_field_metal_ntt::ntt::babybear::metal_r2::BbMetalR2;
+    use small_field_metal_ntt::ntt::babybear::metal_stockham_r2::BbMetalStockhamR2;
     use std::path::PathBuf;
 
     fn shader_dir() -> PathBuf {

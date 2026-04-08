@@ -8,7 +8,7 @@
 use crate::field::babybear::BabyBear;
 use crate::field::Field;
 use crate::gpu::MetalContext;
-use crate::ntt::bb_metal_ct_gs_r4::BbMetalCtGsR4;
+use crate::ntt::babybear::metal_ct_gs_r4::BbMetalCtGsR4;
 use crate::ntt::NttError;
 use std::path::Path;
 
@@ -130,7 +130,7 @@ pub fn coset_lde_batch_cpu(
     batch_size: usize,
     added_bits: usize,
 ) -> Vec<u32> {
-    use crate::ntt::bb_cpu_reference::BbCpuReferenceBackend;
+    use crate::ntt::babybear::cpu_reference::BbCpuReferenceBackend;
 
     let n = 1usize << log_n;
     let log_n_ext = log_n + added_bits;

@@ -28,10 +28,7 @@ struct CachedEntry<F: Field> {
 
 impl<F: Field> TwiddleCache<F> {
     /// Create a new cache with the given generation functions.
-    pub fn new(
-        gen_forward: fn(u32) -> Vec<Vec<F>>,
-        gen_inverse: fn(u32) -> Vec<Vec<F>>,
-    ) -> Self {
+    pub fn new(gen_forward: fn(u32) -> Vec<Vec<F>>, gen_inverse: fn(u32) -> Vec<Vec<F>>) -> Self {
         Self {
             inner: RefCell::new(None),
             gen_forward,

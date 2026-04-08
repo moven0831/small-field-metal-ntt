@@ -546,7 +546,7 @@ fn run_coset_lde_benchmark() {
 
 fn run_batch_ntt_benchmark() {
     use small_field_metal_ntt::field::babybear::BabyBear;
-    use small_field_metal_ntt::ntt::bb_metal_r2::BbMetalR2;
+    use small_field_metal_ntt::ntt::babybear::metal_r2::BbMetalR2;
 
     let dir = shader_dir();
     let gpu = BbMetalR2::new(&dir).expect("Failed to init BbMetalR2");
@@ -625,11 +625,11 @@ fn run_batch_ntt_benchmark() {
 
 fn run_bb_shootout() {
     use small_field_metal_ntt::field::babybear::BabyBear;
-    use small_field_metal_ntt::ntt::bb_cpu_reference::BbCpuReferenceBackend;
-    use small_field_metal_ntt::ntt::bb_metal_ct_dit_r2::BbMetalCtDitR2;
-    use small_field_metal_ntt::ntt::bb_metal_ct_gs_r4::BbMetalCtGsR4;
-    use small_field_metal_ntt::ntt::bb_metal_r2::BbMetalR2;
-    use small_field_metal_ntt::ntt::bb_metal_stockham_r2::BbMetalStockhamR2;
+    use small_field_metal_ntt::ntt::babybear::cpu_reference::BbCpuReferenceBackend;
+    use small_field_metal_ntt::ntt::babybear::metal_ct_dit_r2::BbMetalCtDitR2;
+    use small_field_metal_ntt::ntt::babybear::metal_ct_gs_r4::BbMetalCtGsR4;
+    use small_field_metal_ntt::ntt::babybear::metal_r2::BbMetalR2;
+    use small_field_metal_ntt::ntt::babybear::metal_stockham_r2::BbMetalStockhamR2;
 
     let dir = shader_dir();
 

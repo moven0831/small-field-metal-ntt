@@ -19,11 +19,14 @@ pub fn generate_inverse_twiddles(log_n: u32) -> Vec<Vec<BabyBear>> {
 }
 
 /// BabyBear twiddle cache using the generic `TwiddleCache<BabyBear>`.
-pub type BbTwiddleCache = super::twiddle_cache::TwiddleCache<BabyBear>;
+pub type BbTwiddleCache = crate::ntt::twiddle_cache::TwiddleCache<BabyBear>;
 
 /// Create a new BabyBear twiddle cache with root-of-unity generators.
 pub fn new_bb_twiddle_cache() -> BbTwiddleCache {
-    super::twiddle_cache::TwiddleCache::new(BabyBear::generate_twiddles, generate_inverse_twiddles)
+    crate::ntt::twiddle_cache::TwiddleCache::new(
+        BabyBear::generate_twiddles,
+        generate_inverse_twiddles,
+    )
 }
 
 #[cfg(test)]

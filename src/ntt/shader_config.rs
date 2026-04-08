@@ -70,7 +70,7 @@ impl R2ShaderConfig for BbR2Config {
     const NORMALIZE: &'static str = "bb_r2_normalize";
 
     fn make_twiddle_cache() -> TwiddleCache<Self::F> {
-        crate::ntt::bb_twiddles::new_bb_twiddle_cache()
+        crate::ntt::babybear::twiddles::new_bb_twiddle_cache()
     }
 }
 

@@ -315,12 +315,7 @@ impl<C: R2ShaderConfig> NttBackend<C::F> for MetalR2<C> {
         Ok(())
     }
 
-    fn pointwise_mul(
-        &self,
-        a: &[C::F],
-        b: &[C::F],
-        out: &mut [C::F],
-    ) -> Result<(), NttError> {
+    fn pointwise_mul(&self, a: &[C::F], b: &[C::F], out: &mut [C::F]) -> Result<(), NttError> {
         if a.len() != b.len() || a.len() != out.len() {
             return Err(NttError::InvalidSize(a.len()));
         }
