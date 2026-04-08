@@ -262,12 +262,7 @@ mod tests {
         for &val in &[1u32, 2, 7, 100, 999999, P - 1] {
             let a = BabyBear::to_monty(val);
             let a_inv = a.inv();
-            assert_eq!(
-                a.mul(a_inv).from_monty(),
-                1,
-                "inv failed for {}",
-                val
-            );
+            assert_eq!(a.mul(a_inv).from_monty(), 1, "inv failed for {}", val);
         }
     }
 

@@ -14,8 +14,8 @@
 use crate::field::m31::M31;
 use crate::field::Field;
 use crate::gpu::MetalContext;
-use crate::ntt::{NttBackend, NttError};
 use crate::ntt::twiddles::TwiddleCache;
+use crate::ntt::{NttBackend, NttError};
 use metal::*;
 use std::path::Path;
 
@@ -84,27 +84,12 @@ impl MetalCtGsR4 {
         // ── Device-memory phase: layers (log_n-1) down to tile_log ─────
         let num_device_layers = log_n - tile_log;
         if num_device_layers > 0 {
-            self.encode_device_phase(
-                cmd,
-                &mut retain,
-                &buf_data,
-                &twiddles,
-                n,
-                log_n,
-                tile_log,
-            )?;
+            self.encode_device_phase(cmd, &mut retain, &buf_data, &twiddles, n, log_n, tile_log)?;
         }
 
         // ── Threadgroup phase: layers (tile_log-1) down to 0 ───────────
         if tile_log > 0 {
-            self.encode_threadgroup_phase(
-                cmd,
-                &mut retain,
-                &buf_data,
-                &twiddles,
-                n,
-                tile_log,
-            )?;
+            self.encode_threadgroup_phase(cmd, &mut retain, &buf_data, &twiddles, n, tile_log)?;
         }
 
         let total_ns = MetalContext::submit_batch(cmd, &retain)?;
@@ -203,11 +188,7 @@ impl MetalCtGsR4 {
         let buf_tw = self.ctx.buffer_from_slice(&flat_tw)?;
 
         // params: [tile_log, num_r4, has_final_r2, offsets...]
-        let mut params: Vec<u32> = vec![
-            tile_log as u32,
-            num_r4 as u32,
-            has_final_r2 as u32,
-        ];
+        let mut params: Vec<u32> = vec![tile_log as u32, num_r4 as u32, has_final_r2 as u32];
         params.extend(tw_offsets);
         let buf_p = self.ctx.buffer_from_slice(&params)?;
 
@@ -258,14 +239,7 @@ impl MetalCtGsR4 {
 
         // ── Threadgroup phase: layers 0 up to (tile_log-1) ────────────
         if tile_log > 0 {
-            self.encode_threadgroup_inverse(
-                cmd,
-                &mut retain,
-                &buf_data,
-                &itwiddles,
-                n,
-                tile_log,
-            )?;
+            self.encode_threadgroup_inverse(cmd, &mut retain, &buf_data, &itwiddles, n, tile_log)?;
         }
 
         // ── Device-memory phase: layers tile_log up to (log_n-1) ──────
@@ -395,11 +369,7 @@ impl MetalCtGsR4 {
         let buf_tw = self.ctx.buffer_from_slice(&flat_tw)?;
 
         // params: [tile_log, num_r4, has_initial_r2, offsets...]
-        let mut params: Vec<u32> = vec![
-            tile_log as u32,
-            num_r4 as u32,
-            has_initial_r2 as u32,
-        ];
+        let mut params: Vec<u32> = vec![tile_log as u32, num_r4 as u32, has_initial_r2 as u32];
         params.extend(tw_offsets);
         let buf_p = self.ctx.buffer_from_slice(&params)?;
 
@@ -490,32 +460,47 @@ mod tests {
 
     #[test]
     fn test_forward_matches_cpu() {
-        let gpu = match init() { Some(g) => g, None => return };
+        let gpu = match init() {
+            Some(g) => g,
+            None => return,
+        };
         assert_forward_matches_cpu(&gpu, &[4, 16, 256, 1024, 4096, 8192, 16384]);
     }
 
     #[test]
     fn test_roundtrip() {
-        let gpu = match init() { Some(g) => g, None => return };
+        let gpu = match init() {
+            Some(g) => g,
+            None => return,
+        };
         assert_roundtrip(&gpu, &[4, 16, 256, 1024, 8192, 16384]);
     }
 
     #[test]
     fn test_edge_cases() {
-        let gpu = match init() { Some(g) => g, None => return };
+        let gpu = match init() {
+            Some(g) => g,
+            None => return,
+        };
         assert_edge_cases(&gpu);
         assert_inverse_edge_cases(&gpu);
     }
 
     #[test]
     fn test_pointwise_mul() {
-        let gpu = match init() { Some(g) => g, None => return };
+        let gpu = match init() {
+            Some(g) => g,
+            None => return,
+        };
         assert_pointwise_mul(&gpu);
     }
 
     #[test]
     fn test_size2_forward() {
-        let gpu = match init() { Some(g) => g, None => return };
+        let gpu = match init() {
+            Some(g) => g,
+            None => return,
+        };
         assert_forward_matches_cpu(&gpu, &[2]);
     }
 
@@ -524,7 +509,10 @@ mod tests {
     #[test]
     fn test_forward_odd_log_n() {
         // Odd log_n exercises radix-4 + final radix-2 fallback
-        let gpu = match init() { Some(g) => g, None => return };
+        let gpu = match init() {
+            Some(g) => g,
+            None => return,
+        };
         assert_forward_matches_cpu(&gpu, &[8, 32, 2048]);
     }
 
@@ -532,14 +520,20 @@ mod tests {
     fn test_forward_device_phase_coverage() {
         // log_n=15 (odd): 1 r4 device dispatch
         // log_n=16 (even): 1 r4 + 1 r2 device dispatch
-        let gpu = match init() { Some(g) => g, None => return };
+        let gpu = match init() {
+            Some(g) => g,
+            None => return,
+        };
         assert_forward_matches_cpu(&gpu, &[32768, 65536]);
     }
 
     #[test]
     fn test_roundtrip_odd_device_layers() {
         // log_n=15 (odd, 2 device layers): exercises ct_gs_r4_butterfly_device_inv
-        let gpu = match init() { Some(g) => g, None => return };
+        let gpu = match init() {
+            Some(g) => g,
+            None => return,
+        };
         assert_roundtrip(&gpu, &[32768]);
     }
 }

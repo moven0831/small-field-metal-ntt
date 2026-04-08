@@ -39,8 +39,13 @@ fn test_gpu_m31_add() {
     let threadgroups = metal::MTLSize::new((n as u64 + 255) / 256, 1, 1);
     let threads_per = metal::MTLSize::new(256, 1, 1);
 
-    ctx.dispatch_and_wait(&pipeline, &[&buf_a, &buf_b, &buf_out], threadgroups, threads_per)
-        .unwrap();
+    ctx.dispatch_and_wait(
+        &pipeline,
+        &[&buf_a, &buf_b, &buf_out],
+        threadgroups,
+        threads_per,
+    )
+    .unwrap();
 
     let result = MetalContext::read_buffer(&buf_out, n);
 
@@ -75,8 +80,13 @@ fn test_gpu_m31_mul() {
     let threadgroups = metal::MTLSize::new((n as u64 + 255) / 256, 1, 1);
     let threads_per = metal::MTLSize::new(256, 1, 1);
 
-    ctx.dispatch_and_wait(&pipeline, &[&buf_a, &buf_b, &buf_out], threadgroups, threads_per)
-        .unwrap();
+    ctx.dispatch_and_wait(
+        &pipeline,
+        &[&buf_a, &buf_b, &buf_out],
+        threadgroups,
+        threads_per,
+    )
+    .unwrap();
 
     let result = MetalContext::read_buffer(&buf_out, n);
 
@@ -111,8 +121,13 @@ fn test_gpu_m31_mul_edge_cases() {
     let threadgroups = metal::MTLSize::new(1, 1, 1);
     let threads_per = metal::MTLSize::new(n as u64, 1, 1);
 
-    ctx.dispatch_and_wait(&pipeline, &[&buf_a, &buf_b, &buf_out], threadgroups, threads_per)
-        .unwrap();
+    ctx.dispatch_and_wait(
+        &pipeline,
+        &[&buf_a, &buf_b, &buf_out],
+        threadgroups,
+        threads_per,
+    )
+    .unwrap();
 
     let result = MetalContext::read_buffer(&buf_out, n);
 

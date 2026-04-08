@@ -32,7 +32,11 @@ impl BbMetalCtDitR2 {
         })
     }
 
-    pub fn forward_ntt_gpu(&self, input: &[u32], log_n: usize) -> Result<(Vec<u32>, u64), NttError> {
+    pub fn forward_ntt_gpu(
+        &self,
+        input: &[u32],
+        log_n: usize,
+    ) -> Result<(Vec<u32>, u64), NttError> {
         let n = input.len();
         if n != (1 << log_n) {
             return Err(NttError::InvalidSize(n));
@@ -55,7 +59,8 @@ impl BbMetalCtDitR2 {
             let buf_p = self.ctx.buffer_from_slice(&params)?;
 
             let num_butterflies = (n / 2) as u64;
-            let max_tpg = MetalContext::max_threads_per_threadgroup(&self.butterfly_pipeline) as u64;
+            let max_tpg =
+                MetalContext::max_threads_per_threadgroup(&self.butterfly_pipeline) as u64;
             let (tg, tpg) = MetalContext::compute_grid_1d(num_butterflies, max_tpg.min(256));
 
             MetalContext::encode_dispatch(
@@ -101,7 +106,12 @@ impl NttBackend<BabyBear> for BbMetalCtDitR2 {
         todo!("Inverse NTT not implemented for naive CT-DIT baseline")
     }
 
-    fn pointwise_mul(&self, a: &[BabyBear], b: &[BabyBear], out: &mut [BabyBear]) -> Result<(), NttError> {
+    fn pointwise_mul(
+        &self,
+        a: &[BabyBear],
+        b: &[BabyBear],
+        out: &mut [BabyBear],
+    ) -> Result<(), NttError> {
         if a.len() != b.len() || a.len() != out.len() {
             return Err(NttError::InvalidSize(a.len()));
         }
@@ -121,22 +131,30 @@ mod tests {
     fn init() -> Option<BbMetalCtDitR2> {
         match BbMetalCtDitR2::new(&shader_dir()) {
             Ok(g) => Some(g),
-            Err(NttError::DeviceNotFound) => { eprintln!("No Metal device — skipping"); None }
+            Err(NttError::DeviceNotFound) => {
+                eprintln!("No Metal device — skipping");
+                None
+            }
             Err(e) => panic!("Failed to init: {}", e),
         }
     }
 
     fn bb_test_data(n: usize) -> Vec<BabyBear> {
         let mut seed: u64 = n as u64 * 11111 + 98765;
-        (0..n).map(|_| {
-            seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
-            BabyBear::to_monty(((seed >> 33) as u32) % BabyBear::P)
-        }).collect()
+        (0..n)
+            .map(|_| {
+                seed = seed.wrapping_mul(6364136223846793005).wrapping_add(1);
+                BabyBear::to_monty(((seed >> 33) as u32) % BabyBear::P)
+            })
+            .collect()
     }
 
     #[test]
     fn test_forward_matches_cpu() {
-        let gpu = match init() { Some(g) => g, None => return };
+        let gpu = match init() {
+            Some(g) => g,
+            None => return,
+        };
         let cpu = BbCpuReferenceBackend::new();
         for &n in &[4, 16, 256, 1024, 4096] {
             let original = bb_test_data(n);
@@ -150,7 +168,10 @@ mod tests {
 
     #[test]
     fn test_edge_cases() {
-        let gpu = match init() { Some(g) => g, None => return };
+        let gpu = match init() {
+            Some(g) => g,
+            None => return,
+        };
         let mut data = vec![BabyBear::zero(); 64];
         gpu.forward_ntt(&mut data, &[]).unwrap();
         assert!(data.iter().all(|&x| x == BabyBear::zero()));

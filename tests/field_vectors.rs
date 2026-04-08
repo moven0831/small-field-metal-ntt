@@ -68,10 +68,7 @@ fn test_bb_inverse_known_values() {
     assert_eq!(BabyBear::one().inv().from_monty(), 1);
 
     // inv(p-1) = p-1 (since (p-1)^2 = 1 mod p)
-    assert_eq!(
-        BabyBear::to_monty(BB_P - 1).inv().from_monty(),
-        BB_P - 1
-    );
+    assert_eq!(BabyBear::to_monty(BB_P - 1).inv().from_monty(), BB_P - 1);
 }
 
 #[test]
@@ -87,13 +84,7 @@ fn test_bb_root_of_unity_orders() {
         for _ in 0..k {
             val = val.mul(val);
         }
-        assert_eq!(
-            val,
-            BabyBear::one(),
-            "g^(2^{}) should be 1 for k={}",
-            k,
-            k
-        );
+        assert_eq!(val, BabyBear::one(), "g^(2^{}) should be 1 for k={}", k, k);
 
         // g^(2^(k-1)) should NOT be 1
         let mut val = g;

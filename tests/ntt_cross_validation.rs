@@ -22,7 +22,10 @@ use small_field_metal_ntt::ntt::NttBackend;
 /// in natural order).
 fn bit_reverse_permutation<T: Copy>(data: &[T]) -> Vec<T> {
     let n = data.len();
-    assert!(n > 1 && n.is_power_of_two(), "bit_reverse_permutation requires n > 1 and power of 2");
+    assert!(
+        n > 1 && n.is_power_of_two(),
+        "bit_reverse_permutation requires n > 1 and power of 2"
+    );
     let log_n = n.trailing_zeros();
     let mut result = vec![data[0]; n];
     for i in 0..n {
@@ -48,7 +51,10 @@ fn test_bb_ntt_matches_plonky3_size_4() {
     let p3_input: Vec<P3BabyBear> = input_vals.iter().map(|&v| P3BabyBear::new(v)).collect();
     let dft = Radix2Dit::default();
     let p3_output = dft.dft(p3_input);
-    let p3_canonical: Vec<u32> = p3_output.iter().map(|x: &P3BabyBear| x.as_canonical_u32()).collect();
+    let p3_canonical: Vec<u32> = p3_output
+        .iter()
+        .map(|x: &P3BabyBear| x.as_canonical_u32())
+        .collect();
 
     // Our NTT (bit-reversed output, GS-DIF)
     let backend = BbCpuReferenceBackend::new();
@@ -83,8 +89,10 @@ fn test_bb_ntt_matches_plonky3_various_sizes() {
         // Plonky3
         let p3_input: Vec<P3BabyBear> = input_vals.iter().map(|&v| P3BabyBear::new(v)).collect();
         let p3_output = dft.dft(p3_input);
-        let p3_canonical: Vec<u32> =
-            p3_output.iter().map(|x: &P3BabyBear| x.as_canonical_u32()).collect();
+        let p3_canonical: Vec<u32> = p3_output
+            .iter()
+            .map(|x: &P3BabyBear| x.as_canonical_u32())
+            .collect();
 
         // Ours
         let mut our_data: Vec<BabyBear> =
@@ -132,7 +140,11 @@ fn test_bb_polynomial_multiplication_via_ntt() {
     backend.inverse_ntt(&mut c, &[]).unwrap();
 
     let result: Vec<u32> = c.iter().map(|x| bb_to_canonical(*x)).collect();
-    assert_eq!(result, vec![3, 10, 8, 0], "Polynomial multiplication failed");
+    assert_eq!(
+        result,
+        vec![3, 10, 8, 0],
+        "Polynomial multiplication failed"
+    );
 }
 
 #[test]
@@ -149,7 +161,10 @@ fn test_bb_inverse_ntt_matches_plonky3() {
     // Forward with Plonky3, then inverse with ours — should recover original
     let p3_input: Vec<P3BabyBear> = input_vals.iter().map(|&v| P3BabyBear::new(v)).collect();
     let p3_output = dft.dft(p3_input);
-    let p3_canonical: Vec<u32> = p3_output.iter().map(|x: &P3BabyBear| x.as_canonical_u32()).collect();
+    let p3_canonical: Vec<u32> = p3_output
+        .iter()
+        .map(|x: &P3BabyBear| x.as_canonical_u32())
+        .collect();
 
     // Put Plonky3's natural-order output into bit-reversed order (what our inverse expects)
     let bit_reversed = bit_reverse_permutation(&p3_canonical);
@@ -160,7 +175,10 @@ fn test_bb_inverse_ntt_matches_plonky3() {
 
     backend.inverse_ntt(&mut our_data, &[]).unwrap();
     let result: Vec<u32> = our_data.iter().map(|x| bb_to_canonical(*x)).collect();
-    assert_eq!(result, input_vals, "Inverse NTT should recover original from Plonky3 forward output");
+    assert_eq!(
+        result, input_vals,
+        "Inverse NTT should recover original from Plonky3 forward output"
+    );
 }
 
 // ─── BabyBear GPU cross-validation ─────────────────────────────────────────
@@ -169,9 +187,9 @@ fn test_bb_inverse_ntt_matches_plonky3() {
 mod bb_gpu_plonky3 {
     use super::*;
     use small_field_metal_ntt::ntt::bb_metal_ct_dit_r2::BbMetalCtDitR2;
+    use small_field_metal_ntt::ntt::bb_metal_ct_gs_r4::BbMetalCtGsR4;
     use small_field_metal_ntt::ntt::bb_metal_r2::BbMetalR2;
     use small_field_metal_ntt::ntt::bb_metal_stockham_r2::BbMetalStockhamR2;
-    use small_field_metal_ntt::ntt::bb_metal_ct_gs_r4::BbMetalCtGsR4;
     use std::path::PathBuf;
 
     fn shader_dir() -> PathBuf {
@@ -199,14 +217,15 @@ mod bb_gpu_plonky3 {
 
         for log_n in [2, 4, 8, 10] {
             let n = 1usize << log_n;
-            let input_vals: Vec<u32> =
-                (0..n).map(|i| (i as u32 * 7 + 3) % BabyBear::P).collect();
+            let input_vals: Vec<u32> = (0..n).map(|i| (i as u32 * 7 + 3) % BabyBear::P).collect();
 
             let p3_input: Vec<P3BabyBear> =
                 input_vals.iter().map(|&v| P3BabyBear::new(v)).collect();
             let p3_output = dft.dft(p3_input);
-            let p3_canonical: Vec<u32> =
-                p3_output.iter().map(|x: &P3BabyBear| x.as_canonical_u32()).collect();
+            let p3_canonical: Vec<u32> = p3_output
+                .iter()
+                .map(|x: &P3BabyBear| x.as_canonical_u32())
+                .collect();
 
             let mut gpu_data: Vec<BabyBear> =
                 input_vals.iter().map(|&v| BabyBear::to_monty(v)).collect();

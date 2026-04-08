@@ -117,14 +117,7 @@ impl BbMetalR2 {
 
         // Threadgroup stages (small strides): layers (tile_log-1) down to 0
         if tile_log > 0 {
-            self.encode_threadgroup_forward(
-                cmd,
-                &mut retain,
-                &buf_data,
-                &twiddles,
-                n,
-                tile_log,
-            )?;
+            self.encode_threadgroup_forward(cmd, &mut retain, &buf_data, &twiddles, n, tile_log)?;
         }
 
         let total_ns = MetalContext::submit_batch(cmd, &retain)?;
@@ -154,14 +147,7 @@ impl BbMetalR2 {
 
         // Threadgroup stages: layers 0 up to (tile_log-1)
         if tile_log > 0 {
-            self.encode_threadgroup_inverse(
-                cmd,
-                &mut retain,
-                &buf_data,
-                &itwiddles,
-                n,
-                tile_log,
-            )?;
+            self.encode_threadgroup_inverse(cmd, &mut retain, &buf_data, &itwiddles, n, tile_log)?;
         }
 
         // Device-memory stages: layers tile_log up to (log_n-1)
@@ -179,7 +165,14 @@ impl BbMetalR2 {
 
         // Normalize
         let inv_n = BabyBear::reduce(n as u64).inv();
-        self.encode_normalize_bb(cmd, &mut retain, &self.normalize_pipeline, &buf_data, n, inv_n)?;
+        self.encode_normalize_bb(
+            cmd,
+            &mut retain,
+            &self.normalize_pipeline,
+            &buf_data,
+            n,
+            inv_n,
+        )?;
 
         let total_ns = MetalContext::submit_batch(cmd, &retain)?;
         let result = MetalContext::read_buffer(&buf_data, n);
@@ -332,13 +325,7 @@ impl BbMetalR2 {
         }
         if tile_log > 0 {
             self.encode_batch_threadgroup_forward(
-                cmd,
-                retain,
-                buf_data,
-                &twiddles,
-                n,
-                tile_log,
-                batch_size,
+                cmd, retain, buf_data, &twiddles, n, tile_log, batch_size,
             )?;
         }
         Ok(())
@@ -362,13 +349,7 @@ impl BbMetalR2 {
 
         if tile_log > 0 {
             self.encode_batch_threadgroup_inverse(
-                cmd,
-                retain,
-                buf_data,
-                &itwiddles,
-                n,
-                tile_log,
-                batch_size,
+                cmd, retain, buf_data, &itwiddles, n, tile_log, batch_size,
             )?;
         }
         for layer in tile_log..log_n {
@@ -405,8 +386,7 @@ impl BbMetalR2 {
         let params: Vec<u32> = vec![n_orig as u32, n_ext as u32, batch_size as u32];
         let buf_p = self.ctx.buffer_from_slice(&params)?;
 
-        let max_tpg =
-            MetalContext::max_threads_per_threadgroup(&self.zero_pad_pipeline) as u64;
+        let max_tpg = MetalContext::max_threads_per_threadgroup(&self.zero_pad_pipeline) as u64;
         let tpg_x = max_tpg.min(n_ext as u64).max(1);
         let tg_x = (n_ext as u64).div_ceil(tpg_x);
 
@@ -435,8 +415,7 @@ impl BbMetalR2 {
         let params: Vec<u32> = vec![n_ext as u32, batch_size as u32];
         let buf_p = self.ctx.buffer_from_slice(&params)?;
 
-        let max_tpg =
-            MetalContext::max_threads_per_threadgroup(&self.coset_shift_pipeline) as u64;
+        let max_tpg = MetalContext::max_threads_per_threadgroup(&self.coset_shift_pipeline) as u64;
         let tpg_x = max_tpg.min(n_ext as u64).max(1);
         let tg_x = (n_ext as u64).div_ceil(tpg_x);
 
@@ -470,13 +449,7 @@ impl BbMetalR2 {
 
         if tile_log > 0 {
             self.encode_batch_threadgroup_inverse(
-                cmd,
-                retain,
-                buf_data,
-                &itwiddles,
-                n,
-                tile_log,
-                batch_size,
+                cmd, retain, buf_data, &itwiddles, n, tile_log, batch_size,
             )?;
         }
         for layer in tile_log..log_n {
@@ -510,12 +483,7 @@ impl BbMetalR2 {
         inv_n: BabyBear,
     ) -> Result<(), NttError> {
         let buf_shifts = self.ctx.buffer_from_slice(shift_powers)?;
-        let params: Vec<u32> = vec![
-            n_orig as u32,
-            n_ext as u32,
-            batch_size as u32,
-            inv_n.0,
-        ];
+        let params: Vec<u32> = vec![n_orig as u32, n_ext as u32, batch_size as u32, inv_n.0];
         let buf_p = self.ctx.buffer_from_slice(&params)?;
 
         let max_tpg =
@@ -862,11 +830,7 @@ impl NttBackend<BabyBear> for BbMetalR2 {
         "bb-metal-r2"
     }
 
-    fn forward_ntt(
-        &self,
-        data: &mut [BabyBear],
-        _twiddles: &[BabyBear],
-    ) -> Result<(), NttError> {
+    fn forward_ntt(&self, data: &mut [BabyBear], _twiddles: &[BabyBear]) -> Result<(), NttError> {
         let n = data.len();
         if n == 0 || (n & (n - 1)) != 0 {
             return Err(NttError::InvalidSize(n));
@@ -883,11 +847,7 @@ impl NttBackend<BabyBear> for BbMetalR2 {
         Ok(())
     }
 
-    fn inverse_ntt(
-        &self,
-        data: &mut [BabyBear],
-        _twiddles: &[BabyBear],
-    ) -> Result<(), NttError> {
+    fn inverse_ntt(&self, data: &mut [BabyBear], _twiddles: &[BabyBear]) -> Result<(), NttError> {
         let n = data.len();
         if n == 0 || (n & (n - 1)) != 0 {
             return Err(NttError::InvalidSize(n));
@@ -961,11 +921,7 @@ mod tests {
             cpu.forward_ntt(&mut cpu_data, &[]).unwrap();
             let mut gpu_data = original.clone();
             gpu.forward_ntt(&mut gpu_data, &[]).unwrap();
-            assert_eq!(
-                gpu_data, cpu_data,
-                "Forward mismatch at size {}",
-                n,
-            );
+            assert_eq!(gpu_data, cpu_data, "Forward mismatch at size {}", n,);
         }
     }
 
@@ -999,12 +955,7 @@ mod tests {
 
         // Generate batch_size columns of test data
         let columns: Vec<Vec<u32>> = (0..batch_size)
-            .map(|_col| {
-                bb_test_data(n)
-                    .iter()
-                    .map(|b| b.0)
-                    .collect::<Vec<u32>>()
-            })
+            .map(|_col| bb_test_data(n).iter().map(|b| b.0).collect::<Vec<u32>>())
             .collect();
 
         // Run single NTT on each column
@@ -1026,7 +977,8 @@ mod tests {
         for col in 0..batch_size {
             let batch_col = &batch_result[col * n..(col + 1) * n];
             assert_eq!(
-                batch_col, &single_results[col][..],
+                batch_col,
+                &single_results[col][..],
                 "Batch column {} doesn't match single NTT",
                 col
             );

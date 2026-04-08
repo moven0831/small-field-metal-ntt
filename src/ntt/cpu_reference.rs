@@ -1,7 +1,7 @@
 use crate::field::m31::M31;
 use crate::field::Field;
-use crate::ntt::{NttBackend, NttError};
 use crate::ntt::twiddles::TwiddleCache;
+use crate::ntt::{NttBackend, NttError};
 
 /// CPU reference implementation of the Circle FFT (CFFT / DCCT) over M31.
 ///
@@ -196,7 +196,10 @@ mod tests {
         let backend = CpuReferenceBackend::new();
         let mut data = vec![M31(0); 16];
         backend.forward_ntt(&mut data, &[]).unwrap();
-        assert!(data.iter().all(|&x| x == M31(0)), "NTT of zeros should be zeros");
+        assert!(
+            data.iter().all(|&x| x == M31(0)),
+            "NTT of zeros should be zeros"
+        );
     }
 
     #[test]
@@ -250,7 +253,11 @@ mod tests {
         backend.forward_ntt(&mut a_plus_b, &[]).unwrap();
 
         // NTT(a) + NTT(b)
-        let sum: Vec<M31> = ntt_a.iter().zip(ntt_b.iter()).map(|(&x, &y)| x.add(y)).collect();
+        let sum: Vec<M31> = ntt_a
+            .iter()
+            .zip(ntt_b.iter())
+            .map(|(&x, &y)| x.add(y))
+            .collect();
 
         assert_eq!(a_plus_b, sum, "NTT should be linear");
     }

@@ -30,7 +30,11 @@ pub fn generate_twiddles(coset: &Coset) -> Vec<Vec<M31>> {
         let layer_twiddles: Vec<M31> = (0..half_size)
             .map(|i| {
                 let p = current.at(bit_reverse_idx(i, current.log_size - 1));
-                if is_last_layer { p.y } else { p.x }
+                if is_last_layer {
+                    p.y
+                } else {
+                    p.x
+                }
             })
             .collect();
         result.push(layer_twiddles);
@@ -102,14 +106,28 @@ impl TwiddleCache {
     /// Returns an `Rc` — cheap reference count bump, no data copy.
     pub fn forward(&self, log_n: u32) -> Rc<Vec<Vec<M31>>> {
         self.ensure_cached(log_n);
-        Rc::clone(&self.inner.borrow().as_ref().expect("ensure_cached must populate cache").forward)
+        Rc::clone(
+            &self
+                .inner
+                .borrow()
+                .as_ref()
+                .expect("ensure_cached must populate cache")
+                .forward,
+        )
     }
 
     /// Get inverse twiddles for the given log_n, computing and caching if needed.
     /// Returns an `Rc` — cheap reference count bump, no data copy.
     pub fn inverse(&self, log_n: u32) -> Rc<Vec<Vec<M31>>> {
         self.ensure_cached(log_n);
-        Rc::clone(&self.inner.borrow().as_ref().expect("ensure_cached must populate cache").inverse)
+        Rc::clone(
+            &self
+                .inner
+                .borrow()
+                .as_ref()
+                .expect("ensure_cached must populate cache")
+                .inverse,
+        )
     }
 
     fn ensure_cached(&self, log_n: u32) {
