@@ -1,8 +1,9 @@
-// BabyBear radix-2 NTT kernels for Metal GPU.
+// BabyBear NTT kernels for Metal GPU.
 //
-// CT-DIT forward / GS-DIF inverse, in-place with threadgroup memory.
+// All BabyBear NTT variants (radix-2, Stockham, radix-4), single-column and
+// batched, plus LDE helper kernels (zero-pad, coset-shift, fused kernel).
+//
 // Uses BabyBear Montgomery field arithmetic (not Circle NTT).
-//
 // Key difference from M31 Circle NTT twiddle layout:
 //   Standard NTT: twiddle at position j within stride, same for all blocks.
 //   Circle NTT:   twiddle per block (different for each block).
@@ -10,8 +11,8 @@
 // Phase 1 (threadgroup): Small-stride layers in on-chip memory.
 // Phase 2 (device memory): Large-stride layers, one dispatch per layer.
 
-#ifndef BB_NTT_R2_H
-#define BB_NTT_R2_H
+#ifndef BB_NTT_H
+#define BB_NTT_H
 
 #include "babybear_field.metal"
 
@@ -1348,4 +1349,4 @@ kernel void bb_r4_batch_normalize(
     data[idx] = bb_mul(data[idx], scalar);
 }
 
-#endif // BB_NTT_R2_H
+#endif // BB_NTT_H
