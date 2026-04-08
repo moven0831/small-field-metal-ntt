@@ -17,7 +17,7 @@
 //!           └─> newBufferWithLength() → MTLBuffer
 //! ```
 
-use crate::field::m31::M31;
+use crate::field::Field;
 use crate::ntt::NttError;
 use metal::*;
 use std::path::Path;
@@ -243,17 +243,17 @@ impl MetalContext {
 
     /// Encode a radix-2 butterfly dispatch into a batch command buffer.
     /// Pushes temporary buffers into `retain` to keep them alive until GPU completion.
-    pub fn encode_butterfly_r2(
+    pub fn encode_butterfly_r2<F: Field>(
         &self,
         cmd_buffer: &CommandBufferRef,
         retain: &mut Vec<Buffer>,
         pipeline: &ComputePipelineState,
         buf_data: &Buffer,
-        twiddles: &[M31],
+        twiddles: &[F],
         stride: usize,
         n: usize,
     ) -> Result<(), NttError> {
-        let tw_data: Vec<u32> = twiddles.iter().map(|m| m.0).collect();
+        let tw_data: Vec<u32> = twiddles.iter().map(|f| f.raw()).collect();
         let buf_tw = self.buffer_from_slice(&tw_data)?;
         let params: Vec<u32> = vec![stride as u32, n as u32];
         let buf_p = self.buffer_from_slice(&params)?;
@@ -271,20 +271,20 @@ impl MetalContext {
     /// Encode a radix-4 butterfly dispatch into a batch command buffer.
     /// Pushes temporary buffers into `retain` to keep them alive until GPU completion.
     #[allow(clippy::too_many_arguments)]
-    pub fn encode_butterfly_r4(
+    pub fn encode_butterfly_r4<F: Field>(
         &self,
         cmd_buffer: &CommandBufferRef,
         retain: &mut Vec<Buffer>,
         pipeline: &ComputePipelineState,
         buf_data: &Buffer,
-        tw_outer: &[M31],
-        tw_inner: &[M31],
+        tw_outer: &[F],
+        tw_inner: &[F],
         outer_stride: usize,
         inner_stride: usize,
         n: usize,
     ) -> Result<(), NttError> {
-        let tw_o: Vec<u32> = tw_outer.iter().map(|m| m.0).collect();
-        let tw_i: Vec<u32> = tw_inner.iter().map(|m| m.0).collect();
+        let tw_o: Vec<u32> = tw_outer.iter().map(|f| f.raw()).collect();
+        let tw_i: Vec<u32> = tw_inner.iter().map(|f| f.raw()).collect();
         let buf_tw_o = self.buffer_from_slice(&tw_o)?;
         let buf_tw_i = self.buffer_from_slice(&tw_i)?;
         let params: Vec<u32> = vec![outer_stride as u32, inner_stride as u32, n as u32];
@@ -309,16 +309,16 @@ impl MetalContext {
 
     /// Encode a normalize dispatch into a batch command buffer.
     /// Pushes temporary buffers into `retain` to keep them alive until GPU completion.
-    pub fn encode_normalize(
+    pub fn encode_normalize<F: Field>(
         &self,
         cmd_buffer: &CommandBufferRef,
         retain: &mut Vec<Buffer>,
         pipeline: &ComputePipelineState,
         buf_data: &Buffer,
         n: usize,
-        inv_n: M31,
+        inv_n: F,
     ) -> Result<(), NttError> {
-        let params: Vec<u32> = vec![n as u32, inv_n.0];
+        let params: Vec<u32> = vec![n as u32, inv_n.raw()];
         let buf_p = self.buffer_from_slice(&params)?;
 
         let max_tpg = Self::max_threads_per_threadgroup(pipeline) as u64;
@@ -347,15 +347,15 @@ impl MetalContext {
     ///
     /// Each layer has `n/2` butterflies at stride `2^layer`.
     /// Buffers bound: [data, twiddles, params].
-    pub fn dispatch_butterfly_r2(
+    pub fn dispatch_butterfly_r2<F: Field>(
         &self,
         pipeline: &ComputePipelineState,
         buf_data: &Buffer,
-        twiddles: &[M31],
+        twiddles: &[F],
         stride: usize,
         n: usize,
     ) -> Result<u64, NttError> {
-        let tw_data: Vec<u32> = twiddles.iter().map(|m| m.0).collect();
+        let tw_data: Vec<u32> = twiddles.iter().map(|f| f.raw()).collect();
         let buf_tw = self.buffer_from_slice(&tw_data)?;
         let params: Vec<u32> = vec![stride as u32, n as u32];
         let buf_p = self.buffer_from_slice(&params)?;
@@ -373,18 +373,18 @@ impl MetalContext {
     /// operates on 4 elements, so there are `n/4` butterflies.
     /// Buffers bound: [data, twiddles_outer, twiddles_inner, params].
     #[allow(clippy::too_many_arguments)]
-    pub fn dispatch_butterfly_r4(
+    pub fn dispatch_butterfly_r4<F: Field>(
         &self,
         pipeline: &ComputePipelineState,
         buf_data: &Buffer,
-        tw_outer: &[M31],
-        tw_inner: &[M31],
+        tw_outer: &[F],
+        tw_inner: &[F],
         outer_stride: usize,
         inner_stride: usize,
         n: usize,
     ) -> Result<u64, NttError> {
-        let tw_o: Vec<u32> = tw_outer.iter().map(|m| m.0).collect();
-        let tw_i: Vec<u32> = tw_inner.iter().map(|m| m.0).collect();
+        let tw_o: Vec<u32> = tw_outer.iter().map(|f| f.raw()).collect();
+        let tw_i: Vec<u32> = tw_inner.iter().map(|f| f.raw()).collect();
         let buf_tw_o = self.buffer_from_slice(&tw_o)?;
         let buf_tw_i = self.buffer_from_slice(&tw_i)?;
         let params: Vec<u32> = vec![outer_stride as u32, inner_stride as u32, n as u32];
@@ -399,14 +399,14 @@ impl MetalContext {
 
     /// Dispatch the normalization kernel (multiply all elements by inv_n).
     /// Buffers bound: [data, params].
-    pub fn dispatch_normalize(
+    pub fn dispatch_normalize<F: Field>(
         &self,
         pipeline: &ComputePipelineState,
         buf_data: &Buffer,
         n: usize,
-        inv_n: M31,
+        inv_n: F,
     ) -> Result<u64, NttError> {
-        let params: Vec<u32> = vec![n as u32, inv_n.0];
+        let params: Vec<u32> = vec![n as u32, inv_n.raw()];
         let buf_p = self.buffer_from_slice(&params)?;
 
         let max_tpg = Self::max_threads_per_threadgroup(pipeline) as u64;
