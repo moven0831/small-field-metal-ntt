@@ -11,7 +11,7 @@
 #ifndef NTT_CT_DIT_R2_H
 #define NTT_CT_DIT_R2_H
 
-#include "m31_field.metal"
+#include "../fields/m31_field.metal"
 
 /// Bit-reversal permutation kernel.
 /// Reorders data[] so that data[i] goes to data[bit_reverse(i, log_n)].

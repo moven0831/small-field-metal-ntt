@@ -15,7 +15,7 @@
 #ifndef NTT_CT_GS_R2_H
 #define NTT_CT_GS_R2_H
 
-#include "m31_field.metal"
+#include "../fields/m31_field.metal"
 
 // Maximum threadgroup tile: 8192 elements = 32 KB.
 // Handles up to 13 butterfly stages on-chip.

@@ -450,15 +450,21 @@ impl std::fmt::Display for DeviceInfo {
 fn read_shader_source(shader_dir: &Path) -> Result<String, NttError> {
     // Explicit ordered list: headers first (dependency order), then kernels (alphabetical).
     // This avoids non-deterministic std::fs::read_dir ordering.
-    let headers = &["m31_field.metal", "ntt_common.metal"];
+    let headers = &[
+        "fields/m31_field.metal",
+        "fields/babybear_field.metal",
+        "m31/m31_ntt_common.metal",
+        "babybear/bb_common.metal",
+    ];
     let kernels = &[
-        "babybear_field.metal",
-        "bb_ntt.metal",
-        "ntt_ct_dit_r2.metal",
-        "ntt_ct_gs_r2.metal",
-        "ntt_ct_gs_r4.metal",
-        "ntt_stockham_r2.metal",
-        "test_kernels.metal",
+        "m31/m31_ntt_ct_dit_r2.metal",
+        "m31/m31_ntt_ct_gs_r2.metal",
+        "m31/m31_ntt_ct_gs_r4.metal",
+        "m31/m31_ntt_stockham_r2.metal",
+        "babybear/bb_ntt_r2.metal",
+        "babybear/bb_ntt_stockham_r2.metal",
+        "babybear/bb_ntt_r4.metal",
+        "test/test_kernels.metal",
     ];
 
     let mut source = String::new();
