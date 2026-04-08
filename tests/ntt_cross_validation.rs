@@ -16,8 +16,13 @@ use small_field_metal_ntt::ntt::NttBackend;
 // ─── Plonky3 cross-validation (BabyBear) ───────────────────────────────────
 
 /// Bit-reverse permutation of a slice.
+///
+/// Our GS-DIF forward NTT produces bit-reversed output. This permutation
+/// converts to natural order for comparison against Plonky3 (which outputs
+/// in natural order).
 fn bit_reverse_permutation<T: Copy>(data: &[T]) -> Vec<T> {
     let n = data.len();
+    assert!(n > 1 && n.is_power_of_two(), "bit_reverse_permutation requires n > 1 and power of 2");
     let log_n = n.trailing_zeros();
     let mut result = vec![data[0]; n];
     for i in 0..n {

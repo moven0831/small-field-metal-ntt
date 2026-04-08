@@ -79,7 +79,7 @@ fn test_bb_root_of_unity_orders() {
     // For each k from 1..=10, verify:
     // 1. g^(2^k) == 1
     // 2. g^(2^(k-1)) != 1 (primitive root check)
-    for k in 1..=10u32 {
+    for k in 1..=27u32 {
         let g = BabyBear::two_adic_generator(k);
 
         // g^(2^k) should be 1
