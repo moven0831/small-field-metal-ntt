@@ -52,7 +52,7 @@ impl R2ShaderConfig for M31R2Config {
     const NORMALIZE: &'static str = "ct_gs_r2_normalize";
 
     fn make_twiddle_cache() -> TwiddleCache<Self::F> {
-        crate::ntt::twiddles::new_m31_twiddle_cache()
+        crate::ntt::m31::twiddles::new_m31_twiddle_cache()
     }
 }
 

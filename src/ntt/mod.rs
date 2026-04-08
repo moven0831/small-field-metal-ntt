@@ -1,21 +1,18 @@
-pub mod bb_cpu_reference;
-pub mod bb_metal_ct_dit_r2;
-pub mod bb_metal_ct_gs_r4;
-pub mod bb_metal_r2;
-pub mod bb_metal_stockham_r2;
-pub mod bb_twiddles;
-pub mod cooperative;
+pub mod babybear;
+pub mod m31;
+
+// Re-exports for backward compatibility (removed in next commit)
+pub use babybear::cpu_reference as bb_cpu_reference;
+pub use babybear::metal_ct_dit_r2 as bb_metal_ct_dit_r2;
+pub use babybear::metal_ct_gs_r4 as bb_metal_ct_gs_r4;
+pub use babybear::metal_r2 as bb_metal_r2;
+pub use babybear::metal_stockham_r2 as bb_metal_stockham_r2;
+pub use babybear::twiddles as bb_twiddles;
 pub mod metal_r2;
 pub mod shader_config;
-pub mod twiddle_cache;
-pub mod cpu_reference;
-pub mod metal_ct_dit_r2;
-pub mod metal_ct_gs_r2;
-pub mod metal_ct_gs_r4;
-pub mod metal_stockham_r2;
 #[cfg(test)]
 pub mod test_utils;
-pub mod twiddles;
+pub mod twiddle_cache;
 
 use crate::field::Field;
 

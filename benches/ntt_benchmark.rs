@@ -13,12 +13,12 @@
 use small_field_metal_ntt::field::m31::M31;
 use small_field_metal_ntt::field::Field;
 use small_field_metal_ntt::gpu::MetalContext;
-use small_field_metal_ntt::ntt::cooperative::{self, CooperativeNttContext};
-use small_field_metal_ntt::ntt::cpu_reference::CpuReferenceBackend;
-use small_field_metal_ntt::ntt::metal_ct_dit_r2::MetalCtDitR2;
-use small_field_metal_ntt::ntt::metal_ct_gs_r2::MetalCtGsR2;
-use small_field_metal_ntt::ntt::metal_ct_gs_r4::MetalCtGsR4;
-use small_field_metal_ntt::ntt::metal_stockham_r2::MetalStockhamR2;
+use small_field_metal_ntt::ntt::m31::cooperative::{self, CooperativeNttContext};
+use small_field_metal_ntt::ntt::m31::cpu_reference::CpuReferenceBackend;
+use small_field_metal_ntt::ntt::m31::metal_ct_dit_r2::MetalCtDitR2;
+use small_field_metal_ntt::ntt::m31::metal_ct_gs_r2::MetalCtGsR2;
+use small_field_metal_ntt::ntt::m31::metal_ct_gs_r4::MetalCtGsR4;
+use small_field_metal_ntt::ntt::m31::metal_stockham_r2::MetalStockhamR2;
 use small_field_metal_ntt::ntt::NttBackend;
 use std::path::PathBuf;
 use std::time::Instant;

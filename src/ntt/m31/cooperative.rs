@@ -28,7 +28,7 @@
 use crate::field::m31::M31;
 use crate::field::Field;
 use crate::gpu::MetalContext;
-use crate::ntt::twiddles::TwiddleCache;
+use crate::ntt::m31::twiddles::TwiddleCache;
 use crate::ntt::NttError;
 use metal::*;
 use std::path::Path;
@@ -66,7 +66,7 @@ impl CooperativeNttContext {
             ctx,
             device_pipeline,
             tg_pipeline,
-            twiddle_cache: crate::ntt::twiddles::new_m31_twiddle_cache(),
+            twiddle_cache: crate::ntt::m31::twiddles::new_m31_twiddle_cache(),
         })
     }
 }
@@ -228,7 +228,7 @@ pub fn cooperative_forward_ntt(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ntt::cpu_reference::CpuReferenceBackend;
+    use crate::ntt::m31::cpu_reference::CpuReferenceBackend;
     use crate::ntt::test_utils::try_init_metal;
     use crate::ntt::NttBackend;
 

@@ -81,11 +81,11 @@ pub fn bit_reverse_idx(index: usize, log_size: u32) -> usize {
 /// M31 twiddle cache using the generic `TwiddleCache<M31>`.
 ///
 /// Wraps circle-group coset construction inside the generation functions.
-pub type TwiddleCache = super::twiddle_cache::TwiddleCache<M31>;
+pub type TwiddleCache = crate::ntt::twiddle_cache::TwiddleCache<M31>;
 
 /// Create a new M31 twiddle cache with circle-group generators.
 pub fn new_m31_twiddle_cache() -> TwiddleCache {
-    super::twiddle_cache::TwiddleCache::new(m31_gen_forward, m31_gen_inverse)
+    crate::ntt::twiddle_cache::TwiddleCache::new(m31_gen_forward, m31_gen_inverse)
 }
 
 fn m31_gen_forward(log_n: u32) -> Vec<Vec<M31>> {

@@ -5,7 +5,7 @@
 //! only variant-specific tests (e.g., V4's odd-log radix-2 fallback) local.
 
 use crate::field::m31::M31;
-use crate::ntt::cpu_reference::CpuReferenceBackend;
+use crate::ntt::m31::cpu_reference::CpuReferenceBackend;
 use crate::ntt::{NttBackend, NttError};
 use std::path::PathBuf;
 
