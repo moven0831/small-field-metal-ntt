@@ -10,8 +10,8 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  test:
-    name: Test + Lint
+  lint:
+    name: Lint
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,5 +28,28 @@ jobs:
       - name: Clippy
         run: cargo clippy -- -D warnings
 
-      - name: Run tests
-        run: cargo test --release
+  test:
+    name: Test
+    runs-on: macos-latest
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Unit tests (lib)
+        run: cargo test --release --lib
+
+      - name: Field arithmetic vectors
+        run: cargo test --release --test field_vectors
+
+      - name: NTT cross-validation (Plonky3 + Stwo vectors)
+        run: cargo test --release --test ntt_cross_validation
+
+      - name: GPU integration (Metal)
+        run: cargo test --release --test gpu_integration
+
+      - name: GPU cache coherency (UMA)
+        run: cargo test --release --test cache_coherency
