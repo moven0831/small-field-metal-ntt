@@ -95,6 +95,12 @@ struct CachedEntry {
     inverse: Rc<Vec<Vec<M31>>>,
 }
 
+impl Default for TwiddleCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TwiddleCache {
     pub fn new() -> Self {
         Self {
@@ -135,7 +141,7 @@ impl TwiddleCache {
             .inner
             .borrow()
             .as_ref()
-            .map_or(true, |e| e.log_n != log_n);
+            .is_none_or(|e| e.log_n != log_n);
 
         if needs_recompute {
             let coset = Coset::odds(log_n);

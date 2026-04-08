@@ -29,6 +29,7 @@ pub struct MetalContext {
     pub library: Library,
 }
 
+#[allow(clippy::too_many_arguments)]
 impl MetalContext {
     /// Initialize Metal context by compiling shader source files.
     ///

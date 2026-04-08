@@ -34,6 +34,7 @@ pub struct BbMetalR2 {
     twiddle_cache: BbTwiddleCache,
 }
 
+#[allow(clippy::too_many_arguments)]
 impl BbMetalR2 {
     pub fn new(shader_dir: &Path) -> Result<Self, NttError> {
         let ctx = MetalContext::new(shader_dir)?;

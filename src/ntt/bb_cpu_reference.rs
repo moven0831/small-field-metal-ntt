@@ -13,6 +13,12 @@ pub struct BbCpuReferenceBackend {
     twiddle_cache: BbTwiddleCache,
 }
 
+impl Default for BbCpuReferenceBackend {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BbCpuReferenceBackend {
     pub fn new() -> Self {
         Self {
@@ -24,6 +30,7 @@ impl BbCpuReferenceBackend {
     ///
     /// Uses GS-DIF: natural-order input → bit-reversed output.
     /// Layers processed from large stride to small stride.
+    #[allow(clippy::needless_range_loop)]
     pub fn forward_ntt_u32(&self, data: &mut [u32]) -> Result<(), NttError> {
         let n = data.len();
         if n == 0 || (n & (n - 1)) != 0 {
@@ -58,6 +65,7 @@ impl BbCpuReferenceBackend {
     ///
     /// Uses CT-DIT: bit-reversed input → natural-order output.
     /// Layers processed from small stride to large stride.
+    #[allow(clippy::needless_range_loop)]
     pub fn inverse_ntt_u32(&self, data: &mut [u32]) -> Result<(), NttError> {
         let n = data.len();
         if n == 0 || (n & (n - 1)) != 0 {
@@ -100,6 +108,7 @@ impl NttBackend<BabyBear> for BbCpuReferenceBackend {
         "bb-cpu-reference"
     }
 
+    #[allow(clippy::needless_range_loop)]
     fn forward_ntt(&self, data: &mut [BabyBear], _twiddles: &[BabyBear]) -> Result<(), NttError> {
         let n = data.len();
         if n == 0 || (n & (n - 1)) != 0 {
@@ -131,6 +140,7 @@ impl NttBackend<BabyBear> for BbCpuReferenceBackend {
         Ok(())
     }
 
+    #[allow(clippy::needless_range_loop)]
     fn inverse_ntt(&self, data: &mut [BabyBear], _twiddles: &[BabyBear]) -> Result<(), NttError> {
         let n = data.len();
         if n == 0 || (n & (n - 1)) != 0 {

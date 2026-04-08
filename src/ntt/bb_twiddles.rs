@@ -34,6 +34,12 @@ struct CachedEntry {
     inverse: Rc<Vec<Vec<BabyBear>>>,
 }
 
+impl Default for BbTwiddleCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BbTwiddleCache {
     pub fn new() -> Self {
         Self {
@@ -70,7 +76,7 @@ impl BbTwiddleCache {
             .inner
             .borrow()
             .as_ref()
-            .map_or(true, |e| e.log_n != log_n);
+            .is_none_or(|e| e.log_n != log_n);
 
         if needs_recompute {
             let forward = Rc::new(BabyBear::generate_twiddles(log_n));

@@ -30,6 +30,7 @@ pub const CIRCLE_IDENTITY: CirclePoint = CirclePoint {
 
 impl CirclePoint {
     /// Circle group addition (complex multiplication on the unit circle).
+    #[allow(clippy::should_implement_trait)]
     pub fn add(self, other: CirclePoint) -> CirclePoint {
         use super::Field;
         CirclePoint {
@@ -39,6 +40,7 @@ impl CirclePoint {
     }
 
     /// Circle group negation: -(x, y) = (x, -y).
+    #[allow(clippy::should_implement_trait)]
     pub fn neg(self) -> CirclePoint {
         use super::Field;
         CirclePoint {
