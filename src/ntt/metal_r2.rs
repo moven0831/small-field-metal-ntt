@@ -60,6 +60,11 @@ impl<C: R2ShaderConfig> MetalR2<C> {
         &self.ctx
     }
 
+    /// Access the twiddle cache (for batch wrappers that share twiddles).
+    pub fn twiddle_cache(&self) -> &TwiddleCache<C::F> {
+        &self.twiddle_cache
+    }
+
     /// Run forward NTT on GPU. Returns (result_data, total_gpu_time_ns).
     pub fn forward_ntt_gpu(
         &self,
@@ -333,3 +338,61 @@ pub type MetalCtGsR2 = MetalR2<crate::ntt::shader_config::M31R2Config>;
 
 /// BabyBear standard NTT, radix-2 in-place.
 pub type BbMetalR2New = MetalR2<crate::ntt::shader_config::BbR2Config>;
+
+#[cfg(test)]
+mod tests {
+    use crate::ntt::test_utils::*;
+
+    use super::MetalCtGsR2;
+
+    fn init() -> Option<MetalCtGsR2> {
+        try_init_metal(|p| MetalCtGsR2::new(p))
+    }
+
+    #[test]
+    fn test_m31_generic_forward_matches_cpu() {
+        let gpu = match init() {
+            Some(g) => g,
+            None => return,
+        };
+        assert_forward_matches_cpu(&gpu, &[4, 16, 256, 1024, 4096, 8192, 16384]);
+    }
+
+    #[test]
+    fn test_m31_generic_roundtrip() {
+        let gpu = match init() {
+            Some(g) => g,
+            None => return,
+        };
+        assert_roundtrip(&gpu, &[4, 256, 1024, 8192, 16384]);
+    }
+
+    #[test]
+    fn test_m31_generic_edge_cases() {
+        let gpu = match init() {
+            Some(g) => g,
+            None => return,
+        };
+        assert_edge_cases(&gpu);
+        assert_inverse_edge_cases(&gpu);
+    }
+
+    #[test]
+    fn test_m31_generic_pointwise_mul() {
+        let gpu = match init() {
+            Some(g) => g,
+            None => return,
+        };
+        assert_pointwise_mul(&gpu);
+    }
+
+    #[test]
+    fn test_m31_generic_size2() {
+        let gpu = match init() {
+            Some(g) => g,
+            None => return,
+        };
+        assert_forward_matches_cpu(&gpu, &[2]);
+        assert_roundtrip(&gpu, &[2]);
+    }
+}
