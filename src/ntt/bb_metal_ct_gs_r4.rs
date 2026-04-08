@@ -80,7 +80,7 @@ impl BbMetalCtGsR4 {
             batch_r2_device_inv_pipeline: batch_r2_dev_inv,
             _batch_normalize_pipeline: batch_normalize,
             fused_norm_zeropad_shift_pipeline: fused_norm_zeropad_shift,
-            twiddle_cache: BbTwiddleCache::new(),
+            twiddle_cache: crate::ntt::bb_twiddles::new_bb_twiddle_cache(),
         })
     }
 

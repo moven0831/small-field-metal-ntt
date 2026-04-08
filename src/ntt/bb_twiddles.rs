@@ -6,8 +6,6 @@
 
 use crate::field::babybear::BabyBear;
 use crate::field::Field;
-use std::cell::RefCell;
-use std::rc::Rc;
 
 /// Generate inverse twiddle factors for BabyBear NTT of size 2^log_n.
 ///
@@ -20,74 +18,12 @@ pub fn generate_inverse_twiddles(log_n: u32) -> Vec<Vec<BabyBear>> {
         .collect()
 }
 
-/// Cached twiddle factor storage for BabyBear NTT.
-///
-/// Caches forward and inverse twiddles for the most recently used `log_n`.
-/// Not `Send`/`Sync` — single-threaded only (uses `RefCell` + `Rc`).
-pub struct BbTwiddleCache {
-    inner: RefCell<Option<CachedEntry>>,
-}
+/// BabyBear twiddle cache using the generic `TwiddleCache<BabyBear>`.
+pub type BbTwiddleCache = super::twiddle_cache::TwiddleCache<BabyBear>;
 
-struct CachedEntry {
-    log_n: u32,
-    forward: Rc<Vec<Vec<BabyBear>>>,
-    inverse: Rc<Vec<Vec<BabyBear>>>,
-}
-
-impl Default for BbTwiddleCache {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl BbTwiddleCache {
-    pub fn new() -> Self {
-        Self {
-            inner: RefCell::new(None),
-        }
-    }
-
-    pub fn forward(&self, log_n: u32) -> Rc<Vec<Vec<BabyBear>>> {
-        self.ensure_cached(log_n);
-        Rc::clone(
-            &self
-                .inner
-                .borrow()
-                .as_ref()
-                .expect("ensure_cached must populate cache")
-                .forward,
-        )
-    }
-
-    pub fn inverse(&self, log_n: u32) -> Rc<Vec<Vec<BabyBear>>> {
-        self.ensure_cached(log_n);
-        Rc::clone(
-            &self
-                .inner
-                .borrow()
-                .as_ref()
-                .expect("ensure_cached must populate cache")
-                .inverse,
-        )
-    }
-
-    fn ensure_cached(&self, log_n: u32) {
-        let needs_recompute = self
-            .inner
-            .borrow()
-            .as_ref()
-            .is_none_or(|e| e.log_n != log_n);
-
-        if needs_recompute {
-            let forward = Rc::new(BabyBear::generate_twiddles(log_n));
-            let inverse = Rc::new(generate_inverse_twiddles(log_n));
-            *self.inner.borrow_mut() = Some(CachedEntry {
-                log_n,
-                forward,
-                inverse,
-            });
-        }
-    }
+/// Create a new BabyBear twiddle cache with root-of-unity generators.
+pub fn new_bb_twiddle_cache() -> BbTwiddleCache {
+    super::twiddle_cache::TwiddleCache::new(BabyBear::generate_twiddles, generate_inverse_twiddles)
 }
 
 #[cfg(test)]
@@ -116,7 +52,7 @@ mod tests {
 
     #[test]
     fn test_cache_returns_consistent_results() {
-        let cache = BbTwiddleCache::new();
+        let cache = new_bb_twiddle_cache();
         let a = cache.forward(10);
         let b = cache.forward(10);
         assert_eq!(a.len(), b.len());
@@ -127,7 +63,7 @@ mod tests {
 
     #[test]
     fn test_cache_invalidates_on_size_change() {
-        let cache = BbTwiddleCache::new();
+        let cache = new_bb_twiddle_cache();
         let a = cache.forward(8);
         let b = cache.forward(10);
         assert_eq!(a.len(), 8);

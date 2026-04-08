@@ -73,7 +73,7 @@ impl BbMetalR2 {
             zero_pad_pipeline: zero_pad,
             coset_shift_pipeline: coset_shift,
             fused_norm_zeropad_shift_pipeline: fused_norm_zeropad_shift,
-            twiddle_cache: BbTwiddleCache::new(),
+            twiddle_cache: crate::ntt::bb_twiddles::new_bb_twiddle_cache(),
         })
     }
 

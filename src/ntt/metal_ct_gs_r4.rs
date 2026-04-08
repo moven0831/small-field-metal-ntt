@@ -54,7 +54,7 @@ impl MetalCtGsR4 {
             r4_device_inv_pipeline: r4_dev_inv,
             r2_device_inv_pipeline: r2_dev_inv,
             normalize_pipeline: normalize,
-            twiddle_cache: TwiddleCache::new(),
+            twiddle_cache: crate::ntt::twiddles::new_m31_twiddle_cache(),
         })
     }
 

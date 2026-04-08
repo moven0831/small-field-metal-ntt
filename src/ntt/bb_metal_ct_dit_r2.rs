@@ -28,7 +28,7 @@ impl BbMetalCtDitR2 {
         Ok(Self {
             ctx,
             butterfly_pipeline,
-            twiddle_cache: BbTwiddleCache::new(),
+            twiddle_cache: crate::ntt::bb_twiddles::new_bb_twiddle_cache(),
         })
     }
 

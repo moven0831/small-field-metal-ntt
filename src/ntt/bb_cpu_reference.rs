@@ -22,7 +22,7 @@ impl Default for BbCpuReferenceBackend {
 impl BbCpuReferenceBackend {
     pub fn new() -> Self {
         Self {
-            twiddle_cache: BbTwiddleCache::new(),
+            twiddle_cache: crate::ntt::bb_twiddles::new_bb_twiddle_cache(),
         }
     }
 

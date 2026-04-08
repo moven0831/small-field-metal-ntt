@@ -36,7 +36,7 @@ impl Default for CpuReferenceBackend {
 impl CpuReferenceBackend {
     pub fn new() -> Self {
         Self {
-            twiddle_cache: TwiddleCache::new(),
+            twiddle_cache: crate::ntt::twiddles::new_m31_twiddle_cache(),
         }
     }
 }

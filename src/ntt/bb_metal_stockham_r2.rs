@@ -42,7 +42,7 @@ impl BbMetalStockhamR2 {
             inverse_tg_pipeline: inverse_tg,
             inverse_device_pipeline: inverse_dev,
             normalize_pipeline: normalize,
-            twiddle_cache: BbTwiddleCache::new(),
+            twiddle_cache: crate::ntt::bb_twiddles::new_bb_twiddle_cache(),
         })
     }
 

@@ -66,7 +66,7 @@ impl CooperativeNttContext {
             ctx,
             device_pipeline,
             tg_pipeline,
-            twiddle_cache: TwiddleCache::new(),
+            twiddle_cache: crate::ntt::twiddles::new_m31_twiddle_cache(),
         })
     }
 }
