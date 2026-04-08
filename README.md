@@ -25,13 +25,13 @@ Apple M3, optimized build. Median of 20 iterations, 5 warmup. Forward NTT over M
 
 | Variant | 2^10 | 2^12 | 2^14 | 2^16 | 2^18 | 2^20 |
 |---------|------|------|------|------|------|------|
-| CPU ref | 5 us | 23 us | 95 us | 356 us | 1.5 ms | 6.4 ms |
-| V1 CT-DIT r2 | 412 us | 320 us | 395 us | 558 us | 1.4 ms | 3.2 ms |
-| V2 CT-GS r2 | 357 us | 260 us | 341 us | 420 us | 1.1 ms | 2.7 ms |
-| V3 Stockham | 224 us | 273 us | 334 us | 356 us | 1.2 ms | 4.1 ms |
-| **V4 CT-GS r4** | **216 us** | **253 us** | **309 us** | **392 us** | **880 us** | **2.5 ms** |
+| CPU ref | 6 us | 24 us | 107 us | 379 us | 1.5 ms | 6.5 ms |
+| V1 CT-DIT r2 | 474 us | 426 us | 462 us | 651 us | 1.5 ms | 3.9 ms |
+| V2 CT-GS r2 | 294 us | 317 us | 401 us | 506 us | 1.1 ms | 2.98 ms |
+| V3 Stockham | 441 us | 348 us | 413 us | 555 us | 1.3 ms | 3.3 ms |
+| **V4 CT-GS r4** | **276 us** | **306 us** | **384 us** | **471 us** | **970 us** | **2.98 ms** |
 
-**Winner: V4 (radix-4)** at all GPU sizes. 2.5 ms at 2^20 (420 Melem/s). GPU is **2.6x faster** than CPU at 2^20.
+**V2 and V4 tied at 2^20** (2981 vs 2983 us, ~352 Melem/s). V4 wins at 2^18 (970 us vs 1112 us). GPU is **2.2x faster** than CPU at 2^20.
 
 ### BabyBear NTT (Montgomery, Standard NTT)
 
@@ -39,13 +39,13 @@ Apple M3, optimized build. Forward NTT over BabyBear with Montgomery reduction.
 
 | Variant | 2^10 | 2^12 | 2^14 | 2^16 | 2^18 | 2^20 |
 |---------|------|------|------|------|------|------|
-| CPU ref | 6 us | 28 us | 125 us | 622 us | 2.7 ms | 12.2 ms |
-| V1 CT-DIT r2 | 392 us | 309 us | 386 us | 550 us | 1.4 ms | 3.2 ms |
-| V2 CT-GS r2 | 378 us | 306 us | 351 us | 432 us | 1.2 ms | 2.9 ms |
-| V3 Stockham | 229 us | 278 us | 340 us | 421 us | 1.3 ms | 3.2 ms |
-| **V4 CT-GS r4** | 364 us | **254 us** | **336 us** | **347 us** | **1.0 ms** | 2.9 ms |
+| CPU ref | 6 us | 28 us | 132 us | 588 us | 2.6 ms | 11.7 ms |
+| V1 CT-DIT r2 | 472 us | 366 us | 474 us | 634 us | 1.5 ms | 4.3 ms |
+| V2 CT-GS r2 | 271 us | 300 us | 397 us | 514 us | 1.3 ms | 3.0 ms |
+| V3 Stockham | 433 us | 315 us | 389 us | 601 us | 1.3 ms | 3.4 ms |
+| **V4 CT-GS r4** | **253 us** | **278 us** | **392 us** | **495 us** | **1.0 ms** | **2.7 ms** |
 
-**V4 radix-4 wins at 2^16-2^18**, V2 and V4 are neck-and-neck at 2^20. Montgomery multiply cost reduces radix-4's advantage compared to M31's near-free Mersenne reduction. GPU is **4.2x faster** than CPU at 2^20.
+**V4 radix-4 wins at 2^20** (2721 us, 385 Melem/s). GPU is **4.3x faster** than CPU at 2^20.
 
 ### Batched Coset LDE (BabyBear)
 
@@ -53,12 +53,12 @@ Full coset Low-Degree Extension pipeline: iDFT_batch -> zero_pad -> coset_shift 
 
 | Config | Metal GPU (M3) | Plonky3 CPU (M3, Rayon) | GPU vs CPU |
 |--------|---------------|------------------------|------------|
-| 2^16 x 256, 2x LDE | **36 ms** | 69 ms | **1.9x faster** |
-| 2^18 x 256, 2x LDE | **145 ms** | 237 ms | **1.6x faster** |
-| 2^20 x 256, 2x LDE | **819 ms** | 1177 ms | **1.4x faster** |
-| 2^20 x 256, 4x LDE | 1669 ms | — | — |
+| 2^16 x 256, 2x LDE | **31 ms** | 69 ms | **2.3x faster** |
+| 2^18 x 256, 2x LDE | **146 ms** | 237 ms | **1.6x faster** |
+| 2^20 x 256, 2x LDE | **821 ms** | 1177 ms | **1.4x faster** |
+| 2^20 x 256, 4x LDE | 1661 ms | — | — |
 
-GPU beats Plonky3 CPU at all sizes. Two optimizations made the difference: (1) a fused kernel replaces 3 separate dispatches (normalize + zero-pad + coset-shift) with 1, and (2) switching from radix-2 to radix-4 batched NTT halves the device-memory dispatches (20 → 11 total). Combined: **1.76x faster** than the initial GPU pipeline at 2^20.
+GPU beats Plonky3 CPU at all sizes. Fused kernel (normalize + zero-pad + coset-shift → 1 dispatch) + radix-4 batched NTT (20 → 11 dispatches) yield **1.4x–2.3x** speedup over Plonky3 CPU.
 
 Run with `cargo bench --bench ntt_benchmark -- --coset-lde`.
 
@@ -70,24 +70,24 @@ CPU does the first S layers (high stride, cache-friendly), GPU does the rest (hi
 
 | Size | Optimal split | CPU layers | GPU layers | Total | vs all-GPU | vs all-CPU |
 |------|--------------|------------|------------|-------|------------|------------|
-| 2^10 | 10 (all CPU) | 10 | 0 | 5 us | 60x faster | same |
-| 2^14 | 14 (all CPU) | 14 | 0 | 87 us | 7x faster | same |
-| 2^16 | 16 (all CPU) | 16 | 0 | 388 us | 3x faster | same |
-| **2^18** | **6** | **6** | **12** | **1.2 ms** | **1.9x faster** | **1.4x faster** |
-| **2^20** | **7** | **7** | **13** | **3.8 ms** | **1.5x faster** | **1.9x faster** |
+| 2^10 | 10 (all CPU) | 10 | 0 | 5 us | ~80x faster | same |
+| 2^14 | 14 (all CPU) | 14 | 0 | 158 us | ~3x faster | same |
+| 2^16 | 16 (all CPU) | 16 | 0 | 427 us | ~3x faster | same |
+| **2^18** | **5** | **5** | **13** | **1.3 ms** | **1.7x faster** | **1.5x faster** |
+| **2^20** | **2** | **2** | **18** | **3.7 ms** | **1.1x faster** | **1.9x faster** |
 
-At prover-relevant sizes (2^18+), the U-curve appears: neither all-CPU nor all-GPU is optimal. The cooperative split at 2^20 is **34% faster than all-GPU** and **47% faster than all-CPU**.
+At prover-relevant sizes (2^18+), the cooperative split beats both pure approaches. At 2^20, splitting at layer 2 is **7% faster than all-GPU** and **48% faster than all-CPU**.
 
 ### Key Takeaways
 
-1. **GPU beats CPU for full LDE at all sizes.** After fusing kernel dispatches and switching to radix-4 batched NTT, Metal GPU is 1.4x-1.9x faster than Plonky3 CPU (Rayon) for the coset LDE pipeline that dominates real ZK prover workloads.
-2. **Kernel fusion matters more than raw compute.** Reducing 20 dispatches to 11 (fused normalize+zeropad+shift, batched radix-4) yielded a 1.76x pipeline speedup — larger than any single algorithm improvement.
-3. **UMA changes the game.** On Apple Silicon, splitting NTT between CPU and GPU outperforms both pure approaches at prover-relevant sizes (2^18+). This is the first published evidence.
-4. **GPU wins at 2^18+.** V4 (radix-4) is 2.6x faster than CPU at 2^20 for single NTT. The crossover is around 2^18 where GPU dispatch overhead is amortized.
-5. **Radix-4 wins** the GPU-only shootout. Half the barriers = ~8% speedup over radix-2 at 2^20.
-6. **CPU dominates at small sizes.** GPU dispatch overhead (~200us) makes pure GPU slower than CPU below 2^16.
-7. **Montgomery fields shift the ranking.** BabyBear's Montgomery multiply costs ~3x M31's Mersenne reduction on GPU. This narrows radix-4's advantage (from 8% to ~2% at 2^20) and makes V2/V4 nearly tied at large sizes.
-8. **Twiddle generation dominates naive benchmarks.** Without caching, twiddle gen (79ms at 2^20) dwarfs both CPU butterfly (6.4ms) and GPU dispatch (2.5ms) time.
+1. **GPU beats CPU for full LDE at all sizes.** Metal GPU is 1.4x–2.3x faster than Plonky3 CPU (Rayon) for the coset LDE pipeline.
+2. **Kernel fusion matters more than raw compute.** Reducing 20 dispatches to 11 (fused normalize+zeropad+shift, batched radix-4) yields the largest pipeline speedup.
+3. **UMA enables cooperative splitting.** On Apple Silicon, splitting NTT between CPU and GPU outperforms both pure approaches at 2^18+.
+4. **GPU wins at 2^18+.** GPU is 2.2x faster than CPU at 2^20 for M31, 4.3x for BabyBear. The crossover is around 2^18 where dispatch overhead is amortized.
+5. **V2 and V4 converge for M31.** At 2^20, radix-2 (V2) and radix-4 (V4) are tied. V4 wins at mid-sizes (2^18). M31's cheap Mersenne reduction doesn't penalize extra butterflies.
+6. **V4 radix-4 wins clearly for BabyBear.** 2721 us vs 3005 us at 2^20 — radix-4's fewer dispatches matter more when Montgomery multiply is expensive.
+7. **CPU dominates at small sizes.** GPU dispatch overhead (~250us) makes pure GPU slower than CPU below 2^16.
+8. **Twiddle generation dominates naive benchmarks.** Without caching, twiddle gen dwarfs both CPU butterfly and GPU dispatch time.
 
 ## Why This Matters
 
@@ -169,7 +169,7 @@ All GPU variants use a two-phase strategy:
 - [ ] M31 extension field (Fp2) for Stwo production constraints
 - [ ] GPU timestamps via MTLCommandBuffer (blocked on metal-rs #329)
 - [ ] KoalaBear field (standard NTT, not Circle)
-- [ ] CI with cargo bench on GitHub Actions macOS runner
+- [x] CI with cargo bench on GitHub Actions macOS runner (PR #23)
 
 ## License
 
